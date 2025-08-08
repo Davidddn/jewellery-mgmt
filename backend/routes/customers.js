@@ -1,21 +1,32 @@
 const express = require('express');
 const router = express.Router();
-const customerController = require('../controllers/customerController');
+const {
+  createCustomer,
+  getCustomers,
+  getCustomerById,
+  updateCustomer, // Ensure this is imported correctly
+  deleteCustomer,
+  getCustomerByPhone,
+} = require('../controllers/customerController');
 const auth = require('../middleware/auth');
-const auditLogger = require('../middleware/auditLogger');
+const checkRole = require('../middleware/checkRole');
 
-// All routes require authentication
+// All routes below this will be protected by the auth middleware
 router.use(auth);
 
-// Customer CRUD operations
-router.post('/', auditLogger, customerController.createCustomer);
-router.get('/', customerController.getCustomers);
-router.get('/phone/:phone', customerController.getCustomerByPhone);
-router.get('/:id', customerController.getCustomerById);
-router.put('/:id', auditLogger, customerController.updateCustomer);
-router.delete('/:id', auditLogger, customerController.deleteCustomer);
+// Routes for creating and getting all customers
+router.route('/')
+  .post(checkRole(['admin', 'manager', 'sales']), createCustomer)
+  .get(getCustomers);
 
-// Customer preferences
-router.put('/:id/preferences', auditLogger, customerController.updateCustomerPreferences);
+// Routes for a single customer by ID
+router.route('/:id')
+  .get(getCustomerById)
+  // This is the line that was causing the crash (around line 19)
+  .put(checkRole(['admin', 'manager']), updateCustomer) 
+  .delete(checkRole(['admin']), deleteCustomer);
 
-module.exports = router; 
+// Route to get customer by phone number
+router.get('/phone/:phone', getCustomerByPhone);
+
+module.exports = router;

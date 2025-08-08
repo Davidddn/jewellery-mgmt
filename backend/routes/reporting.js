@@ -2,16 +2,21 @@ const express = require('express');
 const router = express.Router();
 const reportingController = require('../controllers/reportingController');
 const auth = require('../middleware/auth');
+const checkRole = require('../middleware/checkRole');
 
-// All routes require authentication
-router.use(auth);
+// All report routes are protected for admins and managers
+router.use(auth, checkRole(['admin', 'manager', 'sales', 'inventory']));
 
-// Dashboard and analytics
-router.get('/dashboard', reportingController.dailySalesDashboard);
-router.get('/sales-report', reportingController.getSalesReport);
-router.get('/gold-prices', reportingController.getGoldPriceTrends);
-router.get('/customer-analytics', reportingController.getCustomerAnalytics);
-router.get('/inventory-report', reportingController.getInventoryReport);
+// --- Data routes for dashboard and report pages ---
 router.get('/daily-sales', reportingController.dailySalesDashboard);
+router.get('/sales-analytics', reportingController.getSalesAnalytics);
+router.get('/inventory', reportingController.getInventoryReports);
+router.get('/customer-analytics', reportingController.getCustomerAnalytics);
+router.get('/gold-rate', reportingController.getGoldRate);
 
-module.exports = router; 
+// --- Download routes ---
+router.get('/download/sales', reportingController.downloadSalesReport);
+router.get('/download/inventory', reportingController.downloadInventoryReport);
+router.get('/download/customers', reportingController.downloadCustomerReport);
+
+module.exports = router;

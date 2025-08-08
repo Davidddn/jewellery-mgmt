@@ -1,4 +1,5 @@
-const Customer = require('../models/Customer');
+const { Customer } = require('../models');
+const { Op } = require('sequelize');
 
 exports.createCustomer = async (req, res) => {
   try {
@@ -6,167 +7,98 @@ exports.createCustomer = async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'Customer created successfully',
-      customer
+      customer,
     });
   } catch (err) {
-    res.status(400).json({
-      success: false,
-      message: err.message
-    });
+    res.status(400).json({ success: false, message: err.message });
   }
 };
 
 exports.getCustomers = async (req, res) => {
   try {
     const { search, phone, email } = req.query;
-    let query = {};
+    let where = {};
     
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
+      // Changed from $regex to Sequelize's [Op.iLike]
+      where[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { phone: { [Op.iLike]: `%${search}%` } },
+        { email: { [Op.iLike]: `%${search}%` } },
       ];
     }
     
-    if (phone) query.phone = phone;
-    if (email) query.email = email;
+    if (phone) where.phone = phone;
+    if (email) where.email = email;
     
-    const customers = await Customer.find(query);
-    res.json({
-      success: true,
-      customers
-    });
+    // Changed from .find() to .findAll({ where })
+    const customers = await Customer.findAll({ where });
+    res.json({ success: true, customers });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
 exports.getCustomerById = async (req, res) => {
   try {
     const { id } = req.params;
-    const customer = await Customer.findById(id);
+    // Changed from .findById() to .findByPk()
+    const customer = await Customer.findByPk(id);
     
     if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: 'Customer not found'
-      });
+      return res.status(404).json({ success: false, message: 'Customer not found' });
     }
-    
-    res.json({
-      success: true,
-      customer
-    });
+    res.json({ success: true, customer });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
 exports.updateCustomer = async (req, res) => {
   try {
     const { id } = req.params;
-    const customer = await Customer.findByIdAndUpdate(id, req.body, { new: true });
+    // Changed from .findByIdAndUpdate() to .update()
+    const [updated] = await Customer.update(req.body, { where: { id } });
     
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: 'Customer not found'
-      });
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'Customer not found' });
     }
     
+    const updatedCustomer = await Customer.findByPk(id);
     res.json({
       success: true,
       message: 'Customer updated successfully',
-      customer
+      customer: updatedCustomer,
     });
   } catch (err) {
-    res.status(400).json({
-      success: false,
-      message: err.message
-    });
+    res.status(400).json({ success: false, message: err.message });
   }
 };
 
 exports.deleteCustomer = async (req, res) => {
   try {
     const { id } = req.params;
-    const customer = await Customer.findByIdAndDelete(id);
+    // Changed from .findByIdAndDelete() to .destroy()
+    const deleted = await Customer.destroy({ where: { id } });
     
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: 'Customer not found'
-      });
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'Customer not found' });
     }
-    
-    res.json({
-      success: true,
-      message: 'Customer deleted successfully'
-    });
+    res.json({ success: true, message: 'Customer deleted successfully' });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
 exports.getCustomerByPhone = async (req, res) => {
-  try {
-    const { phone } = req.params;
-    const customer = await Customer.findOne({ phone });
-    
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: 'Customer not found'
-      });
+    try {
+        const { phone } = req.params;
+        const customer = await Customer.findOne({ where: { phone } });
+        if (!customer) {
+            return res.status(404).json({ success: false, message: 'Customer not found' });
+        }
+        res.json({ success: true, customer });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
     }
-    
-    res.json({
-      success: true,
-      customer
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
-  }
 };
-
-exports.updateCustomerPreferences = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { preferences } = req.body;
-    
-    const customer = await Customer.findById(id);
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: 'Customer not found'
-      });
-    }
-    
-    customer.preferences = { ...customer.preferences, ...preferences };
-    await customer.save();
-    
-    res.json({
-      success: true,
-      message: 'Preferences updated successfully',
-      customer
-    });
-  } catch (err) {
-    res.status(400).json({
-      success: false,
-      message: err.message
-    });
-  }
-}; 

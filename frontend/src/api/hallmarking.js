@@ -1,6 +1,12 @@
 import api from './config';
 
 export const hallmarkingAPI = {
+  // Get all hallmarking records
+  getAllHallmarking: async (params = {}) => {
+    const response = await api.get('/hallmarking', { params });
+    return response.data;
+  },
+
   // Get hallmarking by product
   getHallmarkingByProduct: async (productId) => {
     const response = await api.get(`/hallmarking/product/${productId}`);
@@ -80,4 +86,4 @@ export const hallmarkingAPI = {
     });
     return response.data;
   }
-}; 
+};

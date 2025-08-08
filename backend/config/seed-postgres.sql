@@ -1,5 +1,4 @@
 -- Jewellery Management System Seed Data for PostgreSQL
--- This file contains sample data for development and testing
 
 -- Clear existing data (optional - remove if you want to keep existing data)
 TRUNCATE TABLE audit_logs CASCADE;
@@ -26,14 +25,13 @@ ALTER SEQUENCE audit_logs_id_seq RESTART WITH 1;
 -- ========================================
 -- USERS (Admin and Staff)
 -- ========================================
-
--- Admin Users (password: admin123)
+-- Passwords 'admin123' hashed using bcrypt
 INSERT INTO users (username, email, password, first_name, last_name, role, phone, is_active) VALUES
 ('admin', 'admin@jewellery.com', '$2b$10$rQZ8K9mX2nL5vF7hJ3cP1qA4sD6gH8iK9lM0nO1pQ2rS3tU4vW5xY6zA7bC8dE9fF0gG1hH2iI3jJ4kK5lL6mM7nN8oO9pP0qQ1rR2sS3tT4uU5vV6wW7xX8yY9zZ', 'John', 'Admin', 'admin', '+1234567890', true),
 ('manager', 'manager@jewellery.com', '$2b$10$rQZ8K9mX2nL5vF7hJ3cP1qA4sD6gH8iK9lM0nO1pQ2rS3tU4vW5xY6zA7bC8dE9fF0gG1hH2iI3jJ4kK5lL6mM7nN8oO9pP0qQ1rR2sS3tT4uU5vV6wW7xX8yY9zZ', 'Sarah', 'Manager', 'manager', '+1234567891', true),
 ('sales1', 'sales1@jewellery.com', '$2b$10$rQZ8K9mX2nL5vF7hJ3cP1qA4sD6gH8iK9lM0nO1pQ2rS3tU4vW5xY6zA7bC8dE9fF0gG1hH2iI3jJ4kK5lL6mM7nN8oO9pP0qQ1rR2sS3tT4uU5vV6wW7xX8yY9zZ', 'Mike', 'Johnson', 'sales', '+1234567892', true),
-('sales2', 'sales2@jewellery.com', '$2b$10$rQZ8K9mX2nL5vF7hJ3cP1qA4sD6gH8iK9lM0nO1pQ2rS3tU4vW5xY6zA7bC8dE9fF0gG1hH2iI3jJ4kK5lL6mM7nN8oO9pP0qQ1rR2sS3tT4uU5vV6wW7xX8yY9zZ', 'Emily', 'Davis', 'sales', '+1234567893', true),
-('inventory', 'inventory@jewellery.com', '$2b$10$rQZ8K9mX2nL5vF7hJ3cP1qA4sD6gH8iK9lM0nO1pQ2rS3tU4vW5xY6zA7bC8dE9fF0gG1hH2iI3jJ4kK5lL6mM7nN8oO9pP0qQ1rR2sS3tT4uU5vV6wW7xX8yY9zZ', 'David', 'Wilson', 'inventory', '+1234567894', true);
+('sales2', 'sales2@jewellery.com', '$2b$10$rQZ8K9mX2nL5vF7hJ3cP1qA4sD6gH8iK9lM0nO1pQ2rS3tT4uU5vV6wW7xX8yY9zZ', 'Emily', 'Davis', 'sales', '+1234567893', true),
+('inventory', 'inventory@jewellery.com', '$2b$10$rQZ8K9mX2nL5vF7hJ3cP1qA4sD6gH8iK9lM0nO1pQ2rS3tT4uU5vV6wW7xX8yY9zZ', 'David', 'Wilson', 'inventory', '+1234567894', true);
 
 -- ========================================
 -- CUSTOMERS
@@ -75,9 +73,38 @@ INSERT INTO products (name, description, category, subcategory, sku, barcode, we
 ('Silver Charm Bracelet', 'Charming silver bracelet with multiple charms', 'Bracelets', 'Charms', 'GB003', '1234567890134', 6.0, '925', 'Silver', NULL, NULL, 200.00, 350.00, 0, 18, 6, 'Silver Crafters', true);
 
 -- ========================================
--- INVENTORY
+-- TRANSACTIONS (Sample Sales)
 -- ========================================
 
+INSERT INTO transactions (customer_id, user_id, transaction_type, total_amount, discount_amount, tax_amount, final_amount, payment_method, payment_status, transaction_status, notes) VALUES
+(1, 3, 'sale', 1800.00, 90.00, 90.00, 1800.00, 'credit_card', 'completed', 'completed', 'Diamond ring purchase'),
+(2, 4, 'sale', 1200.00, 0.00, 60.00, 1260.00, 'cash', 'completed', 'completed', 'Gold chain purchase'),
+(3, 3, 'sale', 3800.00, 380.00, 190.00, 3610.00, 'bank_transfer', 'completed', 'completed', 'Platinum pendant purchase'),
+(4, 4, 'sale', 450.00, 0.00, 22.50, 472.50, 'cash', 'completed', 'completed', 'Silver necklace purchase'),
+(5, 3, 'sale', 1200.00, 60.00, 60.00, 1200.00, 'credit_card', 'completed', 'completed', 'Diamond earrings purchase'),
+(6, 4, 'sale', 250.00, 0.00, 12.50, 262.50, 'cash', 'completed', 'completed', 'Silver earrings purchase'),
+(7, 3, 'sale', 3000.00, 300.00, 150.00, 2850.00, 'credit_card', 'completed', 'completed', 'Diamond bracelet purchase'),
+(8, 4, 'sale', 1500.00, 0.00, 75.00, 1575.00, 'cash', 'completed', 'completed', 'Gold bangle purchase');
+
+-- ========================================
+-- TRANSACTION ITEMS
+-- ========================================
+
+INSERT INTO transaction_items (transaction_id, product_id, quantity, unit_price, total_price, discount_percentage) VALUES
+(1, 2, 1, 1800.00, 1800.00, 5),
+(2, 4, 1, 1200.00, 1200.00, 0),
+(3, 5, 1, 3800.00, 3800.00, 10),
+(4, 6, 1, 450.00, 450.00, 0),
+(5, 8, 1, 1200.00, 1200.00, 5),
+(6, 9, 1, 250.00, 250.00, 0),
+(7, 11, 1, 3000.00, 3000.00, 10),
+(8, 10, 1, 1500.00, 1500.00, 0);
+
+-- ========================================
+-- INVENTORY
+-- ========================================
+-- Note: This table is no longer strictly needed if `stock_quantity` is on the `products` table
+-- This data is here for legacy/reference purposes
 INSERT INTO inventory (product_id, quantity, location, notes) VALUES
 (1, 15, 'Main Store - Display Case A', 'Premium location near entrance'),
 (2, 8, 'Main Store - Display Case B', 'Locked display for high-value items'),
@@ -107,44 +134,24 @@ INSERT INTO hallmarking (product_id, hallmark_number, purity_verified, weight_ve
 -- ========================================
 -- LOYALTY
 -- ========================================
-
-INSERT INTO loyalty (customer_id, points_earned, points_redeemed, current_balance, tier, last_activity) VALUES
-(1, 250, 100, 150, 'silver', '2024-01-15 10:30:00'),
-(2, 120, 45, 75, 'bronze', '2024-01-20 14:45:00'),
-(3, 450, 150, 300, 'gold', '2024-01-25 16:20:00'),
-(4, 80, 30, 50, 'bronze', '2024-02-01 11:15:00'),
-(5, 320, 120, 200, 'silver', '2024-02-05 13:30:00'),
-(6, 180, 55, 125, 'bronze', '2024-02-10 15:45:00'),
-(7, 600, 200, 400, 'platinum', '2024-02-15 09:20:00'),
-(8, 150, 50, 100, 'bronze', '2024-02-20 12:10:00');
-
--- ========================================
--- TRANSACTIONS (Sample Sales)
--- ========================================
-
-INSERT INTO transactions (transaction_id, customer_id, user_id, transaction_type, total_amount, discount_amount, tax_amount, final_amount, payment_method, payment_status, transaction_status, notes) VALUES
-('TXN001-2024', 1, 3, 'sale', 1800.00, 90.00, 90.00, 1800.00, 'credit_card', 'completed', 'completed', 'Diamond ring purchase'),
-('TXN002-2024', 2, 4, 'sale', 1200.00, 0.00, 60.00, 1260.00, 'cash', 'completed', 'completed', 'Gold chain purchase'),
-('TXN003-2024', 3, 3, 'sale', 3800.00, 380.00, 190.00, 3610.00, 'bank_transfer', 'completed', 'completed', 'Platinum pendant purchase'),
-('TXN004-2024', 4, 4, 'sale', 450.00, 0.00, 22.50, 472.50, 'cash', 'completed', 'completed', 'Silver necklace purchase'),
-('TXN005-2024', 5, 3, 'sale', 1200.00, 60.00, 60.00, 1200.00, 'credit_card', 'completed', 'completed', 'Diamond earrings purchase'),
-('TXN006-2024', 6, 4, 'sale', 250.00, 0.00, 12.50, 262.50, 'cash', 'completed', 'completed', 'Silver earrings purchase'),
-('TXN007-2024', 7, 3, 'sale', 3000.00, 300.00, 150.00, 2850.00, 'credit_card', 'completed', 'completed', 'Diamond bracelet purchase'),
-('TXN008-2024', 8, 4, 'sale', 1500.00, 0.00, 75.00, 1575.00, 'cash', 'completed', 'completed', 'Gold bangle purchase');
-
--- ========================================
--- TRANSACTION ITEMS
--- ========================================
-
-INSERT INTO transaction_items (transaction_id, product_id, quantity, unit_price, total_price, discount_percentage) VALUES
-(1, 2, 1, 1800.00, 1800.00, 5),
-(2, 4, 1, 1200.00, 1200.00, 0),
-(3, 5, 1, 3800.00, 3800.00, 10),
-(4, 6, 1, 450.00, 450.00, 0),
-(5, 8, 1, 1200.00, 1200.00, 5),
-(6, 9, 1, 250.00, 250.00, 0),
-(7, 11, 1, 3000.00, 3000.00, 10),
-(8, 10, 1, 1500.00, 1500.00, 0);
+-- Adjusted to use a single 'points' column to match the model logic
+INSERT INTO loyalty (customer_id, points, transaction_id, redeemed) VALUES
+(1, 250, 1, false),
+(1, -100, NULL, true), -- Redemption
+(2, 120, 2, false),
+(2, -45, NULL, true), -- Redemption
+(3, 450, 3, false),
+(3, -150, NULL, true), -- Redemption
+(4, 80, 4, false),
+(4, -30, NULL, true), -- Redemption
+(5, 320, 5, false),
+(5, -120, NULL, true), -- Redemption
+(6, 180, 6, false),
+(6, -55, NULL, true), -- Redemption
+(7, 600, 7, false),
+(7, -200, NULL, true), -- Redemption
+(8, 150, 8, false),
+(8, -50, NULL, true); -- Redemption
 
 -- ========================================
 -- AUDIT LOGS (Sample Activity)
@@ -154,11 +161,11 @@ INSERT INTO audit_logs (user_id, action, table_name, record_id, old_values, new_
 (1, 'CREATE', 'users', 2, NULL, '{"username":"manager","email":"manager@jewellery.com","role":"manager"}', '192.168.1.100', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'),
 (1, 'UPDATE', 'products', 1, '{"stock_quantity":20}', '{"stock_quantity":15}', '192.168.1.100', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'),
 (2, 'CREATE', 'customers', 1, NULL, '{"name":"Alice Johnson","email":"alice.johnson@email.com"}', '192.168.1.101', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'),
-(3, 'CREATE', 'transactions', 1, NULL, '{"transaction_id":"TXN001-2024","total_amount":1800.00}', '192.168.1.102', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'),
-(4, 'UPDATE', 'inventory', 1, '{"quantity":20}', '{"quantity":15}', '192.168.1.103', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
+(3, 'CREATE', 'transactions', 1, NULL, '{"total_amount":1800.00}', '192.168.1.102', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'),
+(4, 'UPDATE', 'products', 1, '{"stock_quantity":20}', '{"stock_quantity":15}', '192.168.1.103', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
 
 -- ========================================
 -- COMMIT TRANSACTION
 -- ========================================
 
-COMMIT; 
+COMMIT;

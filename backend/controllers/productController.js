@@ -1,19 +1,19 @@
-const Product = require('../models/Product');
+const { Op } = require("sequelize");
+const { Product } = require('../models');
 
 // Create product
 exports.createProduct = async (req, res) => {
   try {
-    const product = await Product.create(req.body);
-    res.status(201).json({
-      success: true,
-      message: 'Product created successfully',
-      product
-    });
+    const productData = req.body;
+    // If a file was uploaded, add its path to the data
+    if (req.file) {
+      // The path will depend on your server setup, e.g., '/uploads/filename.jpg'
+      productData.image_url = `/uploads/${req.file.filename}`;
+    }
+    const product = await Product.create(productData);
+    res.status(201).json({ success: true, product });
   } catch (err) {
-    res.status(400).json({
-      success: false,
-      message: err.message
-    });
+    res.status(400).json({ success: false, message: err.message });
   }
 };
 
@@ -22,17 +22,17 @@ exports.getProducts = async (req, res) => {
   try {
     const { category, purity, search } = req.query;
     let query = {};
-    
+
     if (category) query.category = category;
     if (purity) query.purity = purity;
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { barcode: { $regex: search, $options: 'i' } }
+      query[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { barcode: { [Op.iLike]: `%${search}%` } }
       ];
     }
-    
-    const products = await Product.find(query);
+
+    const products = await Product.findAll({ where: query });
     res.json({
       success: true,
       products
@@ -49,15 +49,15 @@ exports.getProducts = async (req, res) => {
 exports.getProductByBarcode = async (req, res) => {
   try {
     const { barcode } = req.params;
-    const product = await Product.findOne({ barcode });
-    
+    const product = await Product.findOne({ where: { barcode } });
+
     if (!product) {
       return res.status(404).json({
         success: false,
         message: 'Product not found'
       });
     }
-    
+
     res.json({
       success: true,
       product
@@ -74,15 +74,15 @@ exports.getProductByBarcode = async (req, res) => {
 exports.getProductById = async (req, res) => {
   try {
     const { id } = req.params;
-    const product = await Product.findById(id);
-    
+    const product = await Product.findByPk(id);
+
     if (!product) {
       return res.status(404).json({
         success: false,
         message: 'Product not found'
       });
     }
-    
+
     res.json({
       success: true,
       product
@@ -99,15 +99,11 @@ exports.getProductById = async (req, res) => {
 exports.updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const product = await Product.findByIdAndUpdate(id, req.body, { new: true });
-    
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
+    const [updatedRows] = await Product.update(req.body, { where: { id } });
+    if (updatedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
     }
-    
+    const product = await Product.findByPk(id);
     res.json({
       success: true,
       message: 'Product updated successfully',
@@ -125,15 +121,10 @@ exports.updateProduct = async (req, res) => {
 exports.deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const product = await Product.findByIdAndDelete(id);
-    
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
+    const deletedRows = await Product.destroy({ where: { id } });
+    if (deletedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
     }
-    
     res.json({
       success: true,
       message: 'Product deleted successfully'
@@ -150,19 +141,20 @@ exports.deleteProduct = async (req, res) => {
 exports.updateStock = async (req, res) => {
   try {
     const { id } = req.params;
-    const { stock } = req.body;
-    
-    const product = await Product.findById(id);
+    // Standardized to 'stock_quantity'
+    const { stock_quantity } = req.body;
+
+    const product = await Product.findByPk(id);
     if (!product) {
       return res.status(404).json({
         success: false,
         message: 'Product not found'
       });
     }
-    
-    product.stock = stock;
+
+    product.stock_quantity = stock_quantity;
     await product.save();
-    
+
     res.json({
       success: true,
       message: 'Stock updated successfully',
@@ -180,9 +172,8 @@ exports.updateStock = async (req, res) => {
 exports.getLowStockProducts = async (req, res) => {
   try {
     const threshold = parseInt(req.query.threshold) || 5;
-    const products = await Product.find({
-      stock: { $lte: threshold }
-    });
+    // Standardized to 'stock_quantity'
+    const products = await Product.findAll({ where: { stock_quantity: { [Op.lte]: threshold } } });
     
     res.json({
       success: true,
@@ -195,4 +186,4 @@ exports.getLowStockProducts = async (req, res) => {
       message: err.message
     });
   }
-}; 
+};

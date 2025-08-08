@@ -1,282 +1,251 @@
-const Transaction = require('../models/Transaction');
-const Product = require('../models/Product');
-const Customer = require('../models/Customer');
-const Loyalty = require('../models/Loyalty');
+const { Transaction, Product, Customer, Loyalty, TransactionItem, sequelize } = require('../models');
+const { Op } = require('sequelize');
+const PDFDocument = require('pdfkit');
 
+// @desc    Create a new transaction
+// @route   POST /api/transactions
+// @access  Admin, Sales
 exports.createTransaction = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
-    const { customer_id, product_id, quantity, payment_mode, emi_months } = req.body;
-    
-    // Validate product exists and has stock
-    const product = await Product.findById(product_id);
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
-    }
-    
-    if (product.stock < quantity) {
-      return res.status(400).json({
-        success: false,
-        message: 'Insufficient stock'
-      });
+    const { customer_id, items, payment_mode } = req.body;
+
+    const customer = await Customer.findByPk(customer_id, { transaction: t });
+    if (!customer) {
+      await t.rollback();
+      return res.status(404).json({ success: false, message: 'Customer not found' });
     }
 
-    // Calculate GST (3% on gold)
-    const gst_amount = product.category === 'gold'
-      ? (product.weight * product.gold_rate * 0.03) * quantity
-      : 0;
+    let total_amount = 0;
+    let total_gst = 0;
+    const transactionItems = [];
 
-    // Calculate total amount
-    const baseAmount = (product.weight * product.gold_rate) + product.making_charge;
-    const total_amount = (baseAmount + gst_amount) * quantity;
+    for (const item of items) {
+      const product = await Product.findByPk(item.product_id, { transaction: t });
+      if (!product) throw new Error(`Product with ID ${item.product_id} not found.`);
+      if (product.stock_quantity < item.quantity) throw new Error(`Insufficient stock for ${product.name}.`);
 
-    const transaction = new Transaction({
+      const item_base_price = product.selling_price * item.quantity;
+      const item_gst = item_base_price * 0.03; // Example GST
+      total_amount += item_base_price + item_gst;
+      total_gst += item_gst;
+
+      product.stock_quantity -= item.quantity;
+      await product.save({ transaction: t });
+      
+      transactionItems.push({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: product.selling_price,
+          total_price: item_base_price,
+      });
+    }
+
+    const transaction = await Transaction.create({
       customer_id,
-      product_id,
-      quantity,
+      user_id: req.user.id,
       total_amount,
-      gst_amount,
-      payment_mode,
-      emi_months,
-      gold_rate_at_sale: product.gold_rate
-    });
+      gst_amount: total_gst,
+      final_amount: total_amount,
+      payment_method: payment_mode,
+      transaction_status: 'completed',
+      transaction_type: 'sale',
+    }, { transaction: t });
 
-    await transaction.save();
-
-    // Update product stock
-    product.stock -= quantity;
-    await product.save();
-
-    // Update customer total purchases
-    const customer = await Customer.findById(customer_id);
-    if (customer) {
-      customer.total_purchases += total_amount;
-      await customer.save();
+    for (const item of transactionItems) {
+        item.transaction_id = transaction.id;
+        await TransactionItem.create(item, { transaction: t });
     }
 
-    // Add loyalty points (1% of transaction value)
-    const loyalty = new Loyalty({
-      customer_id,
-      points: total_amount * 0.01,
-      transaction_id: transaction.invoice_id
-    });
-    await loyalty.save();
+    // Correctly update customer total spent with the final amount
+    customer.total_spent = (parseFloat(customer.total_spent) || 0) + transaction.final_amount;
+    await customer.save({ transaction: t });
 
-    res.status(201).json({
-      success: true,
-      message: 'Transaction created successfully',
-      transaction
-    });
+    // Assuming a simple loyalty point system
+    const points_earned = Math.floor(transaction.final_amount / 100);
+    if (points_earned > 0) {
+        await Loyalty.create({
+            customer_id,
+            points: points_earned,
+            transaction_id: transaction.id,
+        }, { transaction: t });
+    }
+
+    await t.commit();
+    res.status(201).json({ success: true, message: 'Transaction successful', transaction });
   } catch (err) {
-    res.status(400).json({
-      success: false,
-      message: err.message
-    });
+    await t.rollback();
+    res.status(400).json({ success: false, message: err.message });
   }
 };
 
+// @desc    Get all transactions
+// @route   GET /api/transactions
+// @access  Admin, Manager, Sales
 exports.getTransactions = async (req, res) => {
   try {
-    const { customer_id, status, payment_mode, start_date, end_date } = req.query;
-    let filter = {};
-    
-    if (customer_id) filter.customer_id = customer_id;
-    if (status) filter.status = status;
-    if (payment_mode) filter.payment_mode = payment_mode;
-    
-    if (start_date && end_date) {
-      filter.createdAt = {
-        $gte: new Date(start_date),
-        $lte: new Date(end_date)
-      };
-    }
-    
-    const transactions = await Transaction.find(filter).sort({ createdAt: -1 });
-    
-    res.json({
-      success: true,
-      transactions
+    const transactions = await Transaction.findAll({
+      order: [['createdAt', 'DESC']],
+      include: [{ model: Customer, as: 'customer', attributes: ['name', 'phone'] }],
     });
+    res.json({ success: true, transactions });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
+// @desc    Get a single transaction by ID
+// @route   GET /api/transactions/:id
+// @access  Admin, Manager, Sales
 exports.getTransactionById = async (req, res) => {
   try {
     const { id } = req.params;
-    const transaction = await Transaction.findById(id);
-    
+    const transaction = await Transaction.findByPk(id, {
+        include: [
+            { model: Customer, as: 'customer' },
+            { 
+                model: TransactionItem, 
+                as: 'items',
+                include: [{ model: Product, as: 'product' }]
+            }
+        ]
+    });
+
     if (!transaction) {
-      return res.status(404).json({
-        success: false,
-        message: 'Transaction not found'
-      });
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
     }
-    
-    res.json({
-      success: true,
-      transaction
-    });
+    res.json({ success: true, transaction });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
+// @desc    Update a transaction
+// @route   PUT /api/transactions/:id
+// @access  Admin
 exports.updateTransaction = async (req, res) => {
   try {
     const { id } = req.params;
-    const transaction = await Transaction.findByIdAndUpdate(
-      id, 
-      req.body, 
-      { new: true, runValidators: true }
-    );
-    
-    if (!transaction) {
-      return res.status(404).json({
-        success: false,
-        message: 'Transaction not found'
-      });
+    const [updated] = await Transaction.update(req.body, { where: { id } });
+
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
     }
-    
+
+    const updatedTransaction = await Transaction.findByPk(id);
     res.json({
       success: true,
       message: 'Transaction updated successfully',
-      transaction
+      transaction: updatedTransaction,
     });
   } catch (err) {
-    res.status(400).json({
-      success: false,
-      message: err.message
-    });
+    res.status(400).json({ success: false, message: err.message });
   }
 };
 
+// @desc    Delete a transaction
+// @route   DELETE /api/transactions/:id
+// @access  Admin
 exports.deleteTransaction = async (req, res) => {
   try {
     const { id } = req.params;
-    const transaction = await Transaction.findByIdAndDelete(id);
-    
-    if (!transaction) {
-      return res.status(404).json({
-        success: false,
-        message: 'Transaction not found'
-      });
+    const deleted = await Transaction.destroy({ where: { id } });
+
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
     }
-    
-    res.json({
-      success: true,
-      message: 'Transaction deleted successfully'
-    });
+    res.json({ success: true, message: 'Transaction deleted successfully' });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
-exports.processReturn = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { return_reason } = req.body;
-    
-    const transaction = await Transaction.findById(id);
-    if (!transaction) {
-      return res.status(404).json({
-        success: false,
-        message: 'Transaction not found'
-      });
-    }
-    
-    // Update transaction status
-    transaction.status = 'returned';
-    transaction.return_reason = return_reason;
-    await transaction.save();
-    
-    // Restore product stock
-    const product = await Product.findById(transaction.product_id);
-    if (product) {
-      product.stock += transaction.quantity;
-      await product.save();
-    }
-    
-    // Deduct loyalty points
-    const loyalty = await Loyalty.findOne({ transaction_id: transaction.invoice_id });
-    if (loyalty) {
-      loyalty.points = Math.max(0, loyalty.points - (transaction.total_amount * 0.01));
-      await loyalty.save();
-    }
-    
-    res.json({
-      success: true,
-      message: 'Return processed successfully',
-      transaction
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
-  }
-};
+// @desc    Generate PDF Invoice for a transaction
+// @route   GET /api/transactions/:id/invoice
+// @access  Admin, Manager, Sales
+exports.getInvoice = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const transaction = await Transaction.findByPk(id, {
+            include: [
+                { model: Customer, as: 'customer' },
+                { 
+                    model: TransactionItem, 
+                    as: 'items',
+                    include: [{ model: Product, as: 'product' }]
+                }
+            ]
+        });
 
-exports.getTransactionStats = async (req, res) => {
-  try {
-    const { start_date, end_date } = req.query;
-    let dateFilter = {};
-    
-    if (start_date && end_date) {
-      dateFilter.createdAt = {
-        $gte: new Date(start_date),
-        $lte: new Date(end_date)
-      };
+        if (!transaction) {
+            return res.status(404).json({ success: false, message: 'Transaction not found' });
+        }
+
+        const doc = new PDFDocument({ margin: 50 });
+        
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=invoice-${transaction.id}.pdf`);
+        
+        doc.pipe(res);
+
+        // --- PDF Content ---
+        doc.fontSize(20).text('Invoice', { align: 'center' });
+        doc.moveDown();
+        
+        doc.fontSize(12).text(`Invoice ID: ${transaction.id}`);
+        doc.text(`Date: ${new Date(transaction.createdAt).toLocaleDateString()}`);
+        doc.moveDown();
+
+        if (transaction.customer) {
+            doc.text('Bill To:');
+            doc.text(transaction.customer.name);
+            doc.text(transaction.customer.address || '');
+            doc.text(transaction.customer.email || '');
+            doc.text(transaction.customer.phone || '');
+        }
+        
+        doc.moveDown(2);
+
+        // Table Header
+        const tableTop = doc.y;
+        doc.font('Helvetica-Bold');
+        doc.text('Item', 50, tableTop);
+        doc.text('Qty', 250, tableTop);
+        doc.text('Price', 350, tableTop, { width: 100, align: 'right' });
+        doc.text('Total', 450, tableTop, { width: 100, align: 'right' });
+        doc.font('Helvetica');
+
+        // Table Rows
+        let i = 0;
+        for (const item of transaction.items) {
+            const y = tableTop + 25 + (i * 25);
+            doc.text(item.product.name, 50, y);
+            doc.text(item.quantity.toString(), 250, y);
+            doc.text(`₹${item.unit_price}`, 350, y, { width: 100, align: 'right' });
+            doc.text(`₹${item.total_price}`, 450, y, { width: 100, align: 'right' });
+            i++;
+        }
+        
+        doc.moveDown(i + 2);
+
+        // Totals
+        const totalsY = doc.y;
+        const subtotal = parseFloat(transaction.final_amount) - parseFloat(transaction.gst_amount || 0);
+        doc.font('Helvetica-Bold');
+        doc.text('Subtotal:', 350, totalsY, { width: 100, align: 'right' });
+        doc.text(`₹${subtotal.toFixed(2)}`, 450, totalsY, { width: 100, align: 'right' });
+        
+        doc.text('GST:', 350, totalsY + 20, { width: 100, align: 'right' });
+        doc.text(`₹${parseFloat(transaction.gst_amount).toFixed(2)}`, 450, totalsY + 20, { width: 100, align: 'right' });
+        
+        doc.text('Total:', 350, totalsY + 40, { width: 100, align: 'right' });
+        doc.text(`₹${parseFloat(transaction.final_amount).toFixed(2)}`, 450, totalsY + 40, { width: 100, align: 'right' });
+        doc.font('Helvetica');
+
+        doc.end();
+
+    } catch (err) {
+        console.error('Invoice generation error:', err);
+        res.status(500).json({ success: false, message: 'Failed to generate invoice.' });
     }
-    
-    const stats = await Transaction.aggregate([
-      { $match: dateFilter },
-      {
-        $group: {
-          _id: null,
-          totalTransactions: { $sum: 1 },
-          totalRevenue: { $sum: '$total_amount' },
-          avgTransactionValue: { $avg: '$total_amount' }
-        }
-      }
-    ]);
-    
-    const paymentModeStats = await Transaction.aggregate([
-      { $match: dateFilter },
-      {
-        $group: {
-          _id: '$payment_mode',
-          count: { $sum: 1 },
-          total: { $sum: '$total_amount' }
-        }
-      }
-    ]);
-    
-    res.json({
-      success: true,
-      stats: stats[0] || {
-        totalTransactions: 0,
-        totalRevenue: 0,
-        avgTransactionValue: 0
-      },
-      paymentModeStats
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
-  }
-}; 
+};

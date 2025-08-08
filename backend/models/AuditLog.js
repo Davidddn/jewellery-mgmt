@@ -1,100 +1,60 @@
-const BaseModel = require('./BaseModel');
+const { DataTypes } = require('sequelize');
 
-class AuditLog extends BaseModel {
-  constructor() {
-    super('audit_logs');
-  }
+module.exports = (sequelize, DataTypes) => {
+  const AuditLog = sequelize.define('AuditLog', {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true,
+      allowNull: false
+    },
+    userId: {
+      type: DataTypes.INTEGER,
+      allowNull: true, // Can be null if action is by system or unauthenticated
+      references: {
+        model: 'users', // This is the table name of the User model
+        key: 'id',
+      }
+    },
+    action: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      comment: 'e.g., LOGIN, LOGOUT, PRODUCT_CREATED, USER_UPDATED'
+    },
+    entityType: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'e.g., User, Product, Customer'
+    },
+    entityId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: 'ID of the entity affected by the action'
+    },
+    details: {
+      type: DataTypes.JSON, // Use JSON type for flexible storage of details
+      allowNull: true,
+      comment: 'Additional details about the action (e.g., old_value, new_value)'
+    },
+    ipAddress: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    userAgent: {
+      type: DataTypes.STRING,
+      allowNull: true
+    }
+  }, {
+    tableName: 'audit_logs', // Explicit table name
+    timestamps: true, // Adds createdAt and updatedAt
+    updatedAt: false, // Audit logs typically only have a creation timestamp
+    createdAt: 'timestamp' // Rename createdAt to timestamp for audit purposes
+  });
 
-  // Create audit log entry
-  async logAction(userId, action, tableName, recordId, oldValues = null, newValues = null, ipAddress = null, userAgent = null) {
-    return this.create({
-      user_id: userId,
-      action,
-      table_name: tableName,
-      record_id: recordId,
-      old_values: oldValues ? JSON.stringify(oldValues) : null,
-      new_values: newValues ? JSON.stringify(newValues) : null,
-      ip_address: ipAddress,
-      user_agent: userAgent
-    });
-  }
+  // Define association if AuditLog belongs to a User
+  AuditLog.associate = (models) => {
+    AuditLog.belongsTo(models.User, { foreignKey: 'userId', as: 'user' });
+  };
 
-  // Get audit logs by user
-  async getByUser(userId, limit = 50) {
-    const sql = `
-      SELECT al.*, u.username, u.first_name, u.last_name
-      FROM ${this.tableName} al
-      LEFT JOIN users u ON al.user_id = u.id
-      WHERE al.user_id = ?
-      ORDER BY al.created_at DESC
-      LIMIT ?
-    `;
-    return this.query(sql, [userId, limit]);
-  }
-
-  // Get audit logs by table
-  async getByTable(tableName, limit = 50) {
-    const sql = `
-      SELECT al.*, u.username, u.first_name, u.last_name
-      FROM ${this.tableName} al
-      LEFT JOIN users u ON al.user_id = u.id
-      WHERE al.table_name = ?
-      ORDER BY al.created_at DESC
-      LIMIT ?
-    `;
-    return this.query(sql, [tableName, limit]);
-  }
-
-  // Get audit logs by record
-  async getByRecord(tableName, recordId) {
-    const sql = `
-      SELECT al.*, u.username, u.first_name, u.last_name
-      FROM ${this.tableName} al
-      LEFT JOIN users u ON al.user_id = u.id
-      WHERE al.table_name = ? AND al.record_id = ?
-      ORDER BY al.created_at DESC
-    `;
-    return this.query(sql, [tableName, recordId]);
-  }
-
-  // Get audit logs by date range
-  async getByDateRange(startDate, endDate) {
-    const sql = `
-      SELECT al.*, u.username, u.first_name, u.last_name
-      FROM ${this.tableName} al
-      LEFT JOIN users u ON al.user_id = u.id
-      WHERE al.created_at BETWEEN ? AND ?
-      ORDER BY al.created_at DESC
-    `;
-    return this.query(sql, [startDate, endDate]);
-  }
-
-  // Get audit statistics
-  async getAuditStats() {
-    const sql = `
-      SELECT 
-        COUNT(*) as total_logs,
-        COUNT(DISTINCT user_id) as unique_users,
-        COUNT(DISTINCT table_name) as tables_affected,
-        COUNT(CASE WHEN action = 'CREATE' THEN 1 END) as creates,
-        COUNT(CASE WHEN action = 'UPDATE' THEN 1 END) as updates,
-        COUNT(CASE WHEN action = 'DELETE' THEN 1 END) as deletes
-      FROM ${this.tableName}
-    `;
-    return this.queryOne(sql);
-  }
-
-  // Get recent activity
-  async getRecentActivity(limit = 20) {
-    const sql = `
-      SELECT al.*, u.username, u.first_name, u.last_name
-      FROM ${this.tableName} al
-      LEFT JOIN users u ON al.user_id = u.id
-      ORDER BY al.created_at DESC
-      LIMIT ?
-    `;
-    return this.query(sql, [limit]);
-  }
-}
-
-module.exports = new AuditLog(); 
+  return AuditLog;
+};

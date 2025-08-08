@@ -1,18 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const auditLogController = require('../controllers/auditLogController');
+const {
+    getLogs,
+    getAuditStats
+} = require('../controllers/auditLogController');
 const auth = require('../middleware/auth');
+const checkRole = require('../middleware/checkRole');
 
-// All routes require authentication
-router.use(auth);
+// Protect all routes and restrict to admin
+router.use(auth, checkRole(['admin']));
 
-// Audit logs
-router.get('/', auditLogController.getLogs);
-router.get('/user/:user_id', auditLogController.getLogsByUser);
-router.get('/entity/:entity/:entity_id', auditLogController.getLogsByEntity);
+// This is the route that was causing the crash (around line 11)
+router.get('/', getLogs);
+router.get('/stats', getAuditStats);
 
-// Audit analytics
-router.get('/stats', auditLogController.getAuditStats);
-router.get('/export', auditLogController.exportLogs);
-
-module.exports = router; 
+module.exports = router;

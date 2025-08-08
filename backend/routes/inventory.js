@@ -1,21 +1,24 @@
 const express = require('express');
 const router = express.Router();
-const inventoryController = require('../controllers/inventoryController');
+const {
+    scanItem,
+    getLowStockProducts,
+    updateStock,
+    getInventorySummary
+} = require('../controllers/inventoryController');
 const auth = require('../middleware/auth');
+const checkRole = require('../middleware/checkRole');
 
-// All routes require authentication
+// Protect all routes
 router.use(auth);
 
-// Barcode/RFID scanning
-router.post('/scan', inventoryController.scanItem);
+// This is the route that was likely causing the crash (around line 14)
+router.post('/scan', checkRole(['admin', 'inventory', 'sales']), scanItem);
 
-// Stock management
-router.get('/low-stock', inventoryController.getLowStockProducts);
-router.post('/making-charge', inventoryController.calculateMakingCharge);
-router.put('/stock/:id', inventoryController.updateStock);
-router.post('/bulk-update', inventoryController.bulkUpdateStock);
+router.get('/low-stock', checkRole(['admin', 'inventory', 'manager']), getLowStockProducts);
 
-// Inventory summary
-router.get('/summary', inventoryController.getInventorySummary);
+router.get('/summary', checkRole(['admin', 'manager']), getInventorySummary);
 
-module.exports = router; 
+router.patch('/stock/:id', checkRole(['admin', 'inventory']), updateStock);
+
+module.exports = router;

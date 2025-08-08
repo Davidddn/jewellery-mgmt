@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 const { initializeDatabase } = require('../config/init-database');
-const { getDatabaseType } = require('../config/database');
+// const { getDatabaseType } = require('../config/database'); // REMOVED: Not needed with Sequelize
+const { sequelize } = require('../config/database'); // Import sequelize to get dialect
 const fs = require('fs');
 const path = require('path');
 
@@ -10,7 +11,8 @@ console.log('==============================================');
 
 const setupDatabase = async () => {
   try {
-    const dbType = getDatabaseType();
+    // Get database type from Sequelize instance
+    const dbType = sequelize.options.dialect;
     console.log(`📊 Database Type: ${dbType.toUpperCase()}`);
     
     // Create data directory for SQLite if needed
@@ -23,8 +25,8 @@ const setupDatabase = async () => {
     }
     
     // Initialize database
-    console.log('🔄 Initializing database...');
-    const success = await initializeDatabase();
+    console.log('🔄 Initializing database (synchronizing models)...');
+    const success = await initializeDatabase(); // This calls sequelize.sync()
     
     if (success) {
       console.log('✅ Database setup completed successfully!');
@@ -34,7 +36,7 @@ const setupDatabase = async () => {
       console.log('📋 Next steps:');
       console.log('   1. Start the server: npm run dev');
       console.log('   2. Access the application at: http://localhost:5000');
-      console.log('   3. Create your first admin user');
+      // Removed step 3 as seeding now includes admin creation
       console.log('');
     } else {
       console.error('❌ Database setup failed!');
@@ -43,8 +45,12 @@ const setupDatabase = async () => {
   } catch (error) {
     console.error('❌ Setup error:', error.message);
     process.exit(1);
+  } finally {
+    // Close the Sequelize connection after setup is done
+    await sequelize.close();
+    console.log('Database connection closed after setup.');
   }
 };
 
 // Run setup
-setupDatabase(); 
+setupDatabase();

@@ -1,92 +1,167 @@
-const BaseModel = require('./BaseModel');
+const { DataTypes } = require('sequelize');
 
-class TransactionItem extends BaseModel {
-  constructor() {
-    super('transaction_items');
-  }
+module.exports = (sequelize, DataTypes) => {
+  const TransactionItem = sequelize.define('TransactionItem', {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true,
+      allowNull: false
+    },
+    transaction_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'transactions',
+        key: 'id',
+      }
+    },
+    product_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'products',
+        key: 'id',
+      }
+    },
+    quantity: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    unit_price: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false
+    },
+    total_price: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false
+    },
+    notes: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    }
+  }, {
+    tableName: 'transaction_items',
+    timestamps: true, // Adds createdAt and updatedAt
+    underscored: true // Use snake_case
+  });
+
+  // Define associations
+  TransactionItem.associate = (models) => {
+    TransactionItem.belongsTo(models.Transaction, { foreignKey: 'transaction_id', as: 'transaction' });
+    TransactionItem.belongsTo(models.Product, { foreignKey: 'product_id', as: 'product' });
+  };
+
+  // --- Custom methods (re-implemented using Sequelize) ---
 
   // Get items by transaction
-  async getByTransaction(transactionId) {
-    const sql = `
-      SELECT ti.*, p.name as product_name, p.sku, p.barcode
-      FROM ${this.tableName} ti
-      LEFT JOIN products p ON ti.product_id = p.id
-      WHERE ti.transaction_id = ?
-    `;
-    return this.query(sql, [transactionId]);
-  }
+  TransactionItem.getByTransaction = async function(transactionId) {
+    return this.findAll({
+      where: { transaction_id: transactionId },
+      include: [{ model: sequelize.models.Product, as: 'product', attributes: ['name', 'sku', 'barcode'] }]
+    });
+  };
 
   // Get items by product
-  async getByProduct(productId) {
-    const sql = `
-      SELECT ti.*, t.transaction_id, t.transaction_type, t.created_at as transaction_date
-      FROM ${this.tableName} ti
-      LEFT JOIN transactions t ON ti.transaction_id = t.id
-      WHERE ti.product_id = ?
-      ORDER BY t.created_at DESC
-    `;
-    return this.query(sql, [productId]);
-  }
+  TransactionItem.getByProduct = async function(productId) {
+    return this.findAll({
+      where: { product_id: productId },
+      include: [{ model: sequelize.models.Transaction, as: 'transaction', attributes: ['id', 'transaction_type', 'created_at'] }],
+      order: [['transaction', 'created_at', 'DESC']] // Order by transaction date
+    });
+  };
 
   // Get sales statistics by product
-  async getProductSalesStats(productId, startDate = null, endDate = null) {
-    let sql = `
-      SELECT 
-        COUNT(*) as total_sales,
-        SUM(ti.quantity) as total_quantity,
-        SUM(ti.total_price) as total_revenue,
-        AVG(ti.unit_price) as avg_price
-      FROM ${this.tableName} ti
-      LEFT JOIN transactions t ON ti.transaction_id = t.id
-      WHERE ti.product_id = ? AND t.transaction_type = 'sale'
-    `;
-    const params = [productId];
+  TransactionItem.getProductSalesStats = async function(productId, startDate = null, endDate = null) {
+    const Op = sequelize.Op;
+    let whereClause = {
+      product_id: productId,
+      '$transaction.transaction_type$': 'sale' // Access associated model's column
+    };
     
     if (startDate && endDate) {
-      sql += ` AND t.created_at BETWEEN ? AND ?`;
-      params.push(startDate, endDate);
+      whereClause['$transaction.created_at$'] = {
+        [Op.between]: [startDate, endDate]
+      };
     }
     
-    return this.queryOne(sql, params);
-  }
+    return this.findOne({
+      attributes: [
+        [sequelize.fn('COUNT', sequelize.col('TransactionItem.id')), 'total_sales'],
+        [sequelize.fn('SUM', sequelize.col('quantity')), 'total_quantity'],
+        [sequelize.fn('SUM', sequelize.col('total_price')), 'total_revenue'],
+        [sequelize.fn('AVG', sequelize.col('unit_price')), 'avg_price']
+      ],
+      where: whereClause,
+      include: [{
+        model: sequelize.models.Transaction,
+        as: 'transaction',
+        attributes: [], // Don't select transaction attributes directly
+        required: true // INNER JOIN
+      }]
+    });
+  };
 
   // Get top selling products
-  async getTopSellingProducts(limit = 10) {
-    const sql = `
-      SELECT 
-        p.id,
-        p.name,
-        p.sku,
-        SUM(ti.quantity) as total_quantity_sold,
-        SUM(ti.total_price) as total_revenue
-      FROM ${this.tableName} ti
-      LEFT JOIN products p ON ti.product_id = p.id
-      LEFT JOIN transactions t ON ti.transaction_id = t.id
-      WHERE t.transaction_type = 'sale'
-      GROUP BY p.id, p.name, p.sku
-      ORDER BY total_quantity_sold DESC
-      LIMIT ?
-    `;
-    return this.query(sql, [limit]);
-  }
+  TransactionItem.getTopSellingProducts = async function(limit = 10) {
+    return this.findAll({
+      attributes: [
+        'product_id',
+        [sequelize.col('product.name'), 'name'],
+        [sequelize.col('product.sku'), 'sku'],
+        [sequelize.fn('SUM', sequelize.col('TransactionItem.quantity')), 'total_quantity_sold'],
+        [sequelize.fn('SUM', sequelize.col('TransactionItem.total_price')), 'total_revenue']
+      ],
+      include: [{
+        model: sequelize.models.Product,
+        as: 'product',
+        attributes: [], // Don't select product attributes directly
+        required: true // INNER JOIN
+      }, {
+        model: sequelize.models.Transaction,
+        as: 'transaction',
+        attributes: [],
+        where: { transaction_type: 'sale' },
+        required: true
+      }],
+      group: ['product_id', 'product.name', 'product.sku'],
+      order: [[sequelize.literal('total_quantity_sold'), 'DESC']],
+      limit: limit
+    });
+  };
 
   // Get daily sales
-  async getDailySales(date) {
-    const sql = `
-      SELECT 
-        ti.product_id,
-        p.name as product_name,
-        SUM(ti.quantity) as quantity_sold,
-        SUM(ti.total_price) as revenue
-      FROM ${this.tableName} ti
-      LEFT JOIN products p ON ti.product_id = p.id
-      LEFT JOIN transactions t ON ti.transaction_id = t.id
-      WHERE DATE(t.created_at) = ? AND t.transaction_type = 'sale'
-      GROUP BY ti.product_id, p.name
-      ORDER BY revenue DESC
-    `;
-    return this.query(sql, [date]);
-  }
-}
+  TransactionItem.getDailySales = async function(date) {
+    // Ensure date is in 'YYYY-MM-DD' format if needed for SQLite DATE function
+    return this.findAll({
+      attributes: [
+        'product_id',
+        [sequelize.col('product.name'), 'product_name'],
+        [sequelize.fn('SUM', sequelize.col('TransactionItem.quantity')), 'quantity_sold'],
+        [sequelize.fn('SUM', sequelize.col('TransactionItem.total_price')), 'revenue']
+      ],
+      include: [{
+        model: sequelize.models.Product,
+        as: 'product',
+        attributes: [],
+        required: true
+      }, {
+        model: sequelize.models.Transaction,
+        as: 'transaction',
+        attributes: [],
+        where: {
+          transaction_type: 'sale',
+          created_at: {
+            [sequelize.Op.gte]: new Date(date).setHours(0, 0, 0, 0),
+            [sequelize.Op.lt]: new Date(date).setHours(23, 59, 59, 999)
+          }
+        },
+        required: true
+      }],
+      group: ['product_id', 'product.name'],
+      order: [[sequelize.literal('revenue'), 'DESC']]
+    });
+  };
 
-module.exports = new TransactionItem(); 
+  return TransactionItem;
+};

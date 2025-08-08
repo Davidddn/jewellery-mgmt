@@ -1,19 +1,22 @@
 const express = require('express');
 const router = express.Router();
-const loyaltyController = require('../controllers/loyaltyController');
+const {
+    getLoyaltyPoints,
+    redeemPoints,
+    addLoyaltyPoints,
+    getLoyaltyHistory
+} = require('../controllers/loyaltyController');
 const auth = require('../middleware/auth');
+const checkRole = require('../middleware/checkRole');
 
-// All routes require authentication
+// Protect all routes
 router.use(auth);
 
-// Loyalty points management
-router.get('/:customer_id', loyaltyController.getLoyaltyPoints);
-router.post('/:customer_id/redeem', loyaltyController.redeemPoints);
-router.post('/add-points', loyaltyController.addLoyaltyPoints);
-router.get('/:customer_id/history', loyaltyController.getLoyaltyHistory);
+// This is the route that was likely causing the crash (around line 12)
+router.post('/add', checkRole(['admin', 'manager']), addLoyaltyPoints);
+router.post('/redeem/:customer_id', checkRole(['admin', 'sales']), redeemPoints);
 
-// Loyalty analytics
-router.get('/top-customers', loyaltyController.getTopLoyaltyCustomers);
-router.get('/stats', loyaltyController.getLoyaltyStats);
+router.get('/:customer_id', getLoyaltyPoints);
+router.get('/history/:customer_id', getLoyaltyHistory);
 
-module.exports = router; 
+module.exports = router;

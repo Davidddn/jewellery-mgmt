@@ -1,22 +1,28 @@
-const User = require('./User');
-const Product = require('./Product');
-const Customer = require('./Customer');
-const Transaction = require('./Transaction');
-const TransactionItem = require('./TransactionItem');
-const Hallmarking = require('./Hallmarking');
-const AuditLog = require('./AuditLog');
-const Loyalty = require('./Loyalty');
+'use strict';
+const fs = require('fs');
+const path = require('path');
+const Sequelize = require('sequelize');
+const basename = path.basename(__filename);
+const { sequelize } = require('../config/database');
+const db = {};
 
-// SQL database models with foreign key relationships
-// Relationships are handled through foreign key constraints
+// This part correctly initializes all your models
+fs
+  .readdirSync(__dirname)
+  .filter(file => (file.indexOf('.') !== 0) && (file !== basename) && (file.slice(-3) === '.js'))
+  .forEach(file => {
+    const model = require(path.join(__dirname, file))(sequelize, Sequelize.DataTypes);
+    db[model.name] = model;
+  });
 
-module.exports = {
-  User,
-  Product,
-  Customer,
-  Transaction,
-  TransactionItem,
-  Hallmarking,
-  AuditLog,
-  Loyalty
-}; 
+Object.keys(db).forEach(modelName => {
+  if (db[modelName].associate) {
+    db[modelName].associate(db);
+  }
+});
+
+
+db.sequelize = sequelize;
+db.Sequelize = Sequelize;
+
+module.exports = db;

@@ -1,16 +1,16 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: 'http://localhost:5000/api',
   headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 10000, // 10 second timeout
+    'Content-Type': 'application/json'
+  }
 });
 
-// Request interceptor to add auth token
+// Track if we're already redirecting to prevent loops
+let isRedirecting = false;
+
+// Add request interceptor to attach token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -20,36 +20,36 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error('Request error:', error);
     return Promise.reject(error);
   }
 );
 
-// Response interceptor to handle errors
+// Add response interceptor to handle common errors
 api.interceptors.response.use(
-  (response) => {
-    // Handle successful responses
-    return response;
-  },
+  (response) => response,
   (error) => {
-    console.error('API Error:', error.response?.data || error.message);
-    
-    // Handle different error types
-    if (error.response?.status === 401) {
+    // Only handle 401 errors once and prevent loops
+    if (error.response?.status === 401 && !isRedirecting) {
+      console.log('API interceptor: 401 error, clearing auth and redirecting');
+      isRedirecting = true;
+      
+      // Clear auth data
       localStorage.removeItem('token');
-      window.location.href = '/login';
-    } else if (error.response?.status === 404) {
-      console.error('Resource not found');
-    } else if (error.response?.status === 500) {
-      console.error('Server error');
-    } else if (error.code === 'ECONNABORTED') {
-      console.error('Request timeout');
-    } else if (error.code === 'ERR_NETWORK') {
-      console.error('Network error - check if backend is running');
+      localStorage.removeItem('user');
+      delete api.defaults.headers.common['Authorization'];
+      
+      // Reset the flag after a delay to prevent immediate loops
+      setTimeout(() => {
+        isRedirecting = false;
+      }, 1000);
+      
+      // Only redirect if not already on login page
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
-    
     return Promise.reject(error);
   }
 );
 
-export default api; 
+export default api;

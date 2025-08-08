@@ -1,185 +1,273 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  Typography, Box, Tabs, Tab, TextField, Button, Paper, Grid, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, CircularProgress, Alert
+  Typography, Box, TextField, Button, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, CircularProgress, Alert, IconButton, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Grid, FormControlLabel, Switch, Avatar, Select, MenuItem, InputLabel, FormControl
 } from '@mui/material';
+import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon, Upload as UploadIcon } from '@mui/icons-material';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { productsAPI } from '../api/products';
-
-const initialForm = {
-  name: '',
-  description: '',
-  category: '',
-  subcategory: '',
-  sku: '',
-  barcode: '',
-  weight: '',
-  purity: '',
-  metal_type: '',
-  stone_type: '',
-  stone_weight: '',
-  cost_price: '',
-  selling_price: '',
-  discount_percentage: '',
-  stock_quantity: '',
-  reorder_level: '',
-  supplier: '',
-  is_active: true,
-};
+import { useAuth } from '../contexts/useAuth';
 
 const Products = () => {
-  const [tab, setTab] = useState(0);
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState(initialForm);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const res = await productsAPI.getProducts();
-      setProducts(res.products || []);
-    } catch {
-      setError('Failed to fetch products');
-    } finally {
-      setLoading(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [purityFilter, setPurityFilter] = useState('');
+  const [errorAlert, setErrorAlert] = useState('');
+
+  // Dialog states
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [deletingProductId, setDeletingProductId] = useState(null);
+  
+  // State for image handling
+  const [frontImageFile, setFrontImageFile] = useState(null);
+  const [backImageFile, setBackImageFile] = useState(null);
+  const [frontImagePreview, setFrontImagePreview] = useState('');
+  const [backImagePreview, setBackImagePreview] = useState('');
+
+  // Define user permissions
+  const canAdd = user.role === 'admin' || user.role === 'manager';
+  const canEdit = user.role === 'admin' || user.role === 'manager' || user.role === 'inventory';
+  const canDelete = user.role === 'admin';
+
+  // Fetching data with filters
+  const { data, isLoading, error: queryError } = useQuery({
+    queryKey: ['products', { searchTerm, purity: purityFilter }],
+    queryFn: () => productsAPI.getProducts({ search: searchTerm, purity: purityFilter }),
+  });
+
+  // Mutations
+  const createMutation = useMutation({
+    mutationFn: productsAPI.createProduct,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['products']);
+      setAddDialogOpen(false);
+    },
+    onError: (err) => setErrorAlert(err.response?.data?.message || 'Failed to create product.'),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, productData }) => productsAPI.updateProduct(id, productData),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['products']);
+      setEditDialogOpen(false);
+    },
+    onError: (err) => setErrorAlert(err.response?.data?.message || 'Failed to update product.'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => productsAPI.deleteProduct(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['products']);
+      setDeleteDialogOpen(false);
+    },
+    onError: (err) => {
+      setErrorAlert(err.response?.data?.message || 'Failed to delete product.');
+      setDeleteDialogOpen(false);
+    },
+  });
+
+  const handleSearchChange = (event) => setSearchTerm(event.target.value);
+  const handleFilterChange = (event) => setPurityFilter(event.target.value);
+
+  const handleImageChange = (event, type) => {
+    const file = event.target.files[0];
+    if (file) {
+      if (type === 'front') {
+        setFrontImageFile(file);
+        setFrontImagePreview(URL.createObjectURL(file));
+      } else {
+        setBackImageFile(file);
+        setBackImagePreview(URL.createObjectURL(file));
+      }
     }
   };
 
-  useEffect(() => {
-    if (tab === 0) fetchProducts();
-  }, [tab]);
-
-  const handleFormChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
-  };
-
-  const handleAddProduct = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-    setLoading(true);
-    try {
-      await productsAPI.createProduct({
-        ...form,
-        weight: form.weight ? parseFloat(form.weight) : null,
-        stone_weight: form.stone_weight ? parseFloat(form.stone_weight) : null,
-        cost_price: form.cost_price ? parseFloat(form.cost_price) : null,
-        selling_price: form.selling_price ? parseFloat(form.selling_price) : null,
-        discount_percentage: form.discount_percentage ? parseFloat(form.discount_percentage) : null,
-        stock_quantity: form.stock_quantity ? parseInt(form.stock_quantity) : null,
-        reorder_level: form.reorder_level ? parseInt(form.reorder_level) : null,
-      });
-      setSuccess('Product added successfully!');
-      setForm(initialForm);
-      fetchProducts();
-      setTab(0);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to add product');
-    } finally {
-      setLoading(false);
+  const handleFormSubmit = (event, mutation, closeDialog, isEdit = false) => {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const formData = new FormData(formElement);
+    
+    formData.set('is_active', formElement.is_active.checked);
+    if (frontImageFile) formData.append('image', frontImageFile); // Maps to 'image_url' on backend
+    if (backImageFile) formData.append('back_image', backImageFile); // Requires backend support
+    
+    if (isEdit) {
+      mutation.mutate({ id: editingProduct.id, productData: formData });
+    } else {
+      mutation.mutate(formData);
     }
+    closeDialog();
   };
+  
+  const resetImageState = () => {
+    setFrontImageFile(null);
+    setBackImageFile(null);
+    setFrontImagePreview('');
+    setBackImagePreview('');
+  };
+
+  // Dialog handlers
+  const handleOpenAddDialog = () => {
+    resetImageState();
+    setAddDialogOpen(true);
+  };
+  const handleCloseAddDialog = () => setAddDialogOpen(false);
+  
+  const handleOpenEditDialog = (product) => {
+    resetImageState();
+    setEditingProduct(product);
+    setFrontImagePreview(product.image_url || '');
+    setBackImagePreview(product.back_image_url || ''); // Assuming a back_image_url field
+    setEditDialogOpen(true);
+  };
+  const handleCloseEditDialog = () => {
+    setEditDialogOpen(false);
+    setEditingProduct(null);
+  };
+
+  const handleOpenDeleteDialog = (id) => setDeletingProductId(id);
+  const handleCloseDeleteDialog = () => setDeleteDialogOpen(false);
+  const handleDeleteConfirm = () => deleteMutation.mutate(deletingProductId);
+
+  const products = data?.products || [];
+
+  // This form now reflects the fields in your seed-data.sql and Product.js model
+  const renderProductForm = (product = {}) => (
+    <Grid container spacing={2} sx={{ mt: 1 }}>
+      <Grid item xs={12} sm={6}><TextField name="name" label="Product Name" fullWidth required defaultValue={product.name} /></Grid>
+      <Grid item xs={12} sm={6}><TextField name="sku" label="SKU" fullWidth required defaultValue={product.sku} /></Grid>
+      <Grid item xs={12} sm={6}><TextField name="category" label="Category" fullWidth defaultValue={product.category} /></Grid>
+      <Grid item xs={12} sm={6}><TextField name="subcategory" label="Subcategory" fullWidth defaultValue={product.subcategory} /></Grid>
+      <Grid item xs={12} sm={6}><TextField name="barcode" label="Barcode" fullWidth defaultValue={product.barcode} /></Grid>
+      <Grid item xs={12} sm={6}><TextField name="metal_type" label="Metal Type" fullWidth required defaultValue={product.metal_type} /></Grid>
+      <Grid item xs={12} sm={6}><TextField name="purity" label="Purity (e.g., 22K, 925)" fullWidth defaultValue={product.purity} /></Grid>
+      <Grid item xs={12} sm={6}><TextField name="weight" label="Weight (grams)" type="number" fullWidth defaultValue={product.weight} /></Grid>
+      <Grid item xs={12} sm={6}><TextField name="stone_type" label="Stone Type" fullWidth defaultValue={product.stone_type} /></Grid>
+      <Grid item xs={12} sm={6}><TextField name="stone_weight" label="Stone Weight (carats)" type="number" fullWidth defaultValue={product.stone_weight} /></Grid>
+      <Grid item xs={12} sm={6}><TextField name="cost_price" label="Cost Price" type="number" fullWidth required defaultValue={product.cost_price} /></Grid>
+      <Grid item xs={12} sm={6}><TextField name="selling_price" label="Selling Price" type="number" fullWidth required defaultValue={product.selling_price} /></Grid>
+      <Grid item xs={12} sm={6}><TextField name="stock_quantity" label="Stock Quantity" type="number" fullWidth required defaultValue={product.stock_quantity} /></Grid>
+      <Grid item xs={12} sm={6}><TextField name="reorder_level" label="Reorder Level" type="number" fullWidth defaultValue={product.reorder_level} /></Grid>
+      <Grid item xs={12}><TextField name="supplier" label="Supplier" fullWidth defaultValue={product.supplier} /></Grid>
+      <Grid item xs={12}><TextField name="description" label="Description" multiline rows={3} fullWidth defaultValue={product.description} /></Grid>
+      
+      {/* Dual Image Uploaders */}
+      <Grid item xs={12} sm={6}>
+        <Typography variant="subtitle1" gutterBottom>Product Image</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Avatar src={frontImagePreview} sx={{ width: 80, height: 80 }} variant="rounded" />
+          <Button variant="outlined" component="label" startIcon={<UploadIcon />}> Upload <input type="file" hidden accept="image/*" onChange={(e) => handleImageChange(e, 'front')} /> </Button>
+        </Box>
+      </Grid>
+      <Grid item xs={12} sm={6}>
+        <Typography variant="subtitle1" gutterBottom>Background Image</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Avatar src={backImagePreview} sx={{ width: 80, height: 80 }} variant="rounded" />
+          <Button variant="outlined" component="label" startIcon={<UploadIcon />}> Upload <input type="file" hidden accept="image/*" onChange={(e) => handleImageChange(e, 'back')} /> </Button>
+        </Box>
+      </Grid>
+      
+      <Grid item xs={12}>
+        <FormControlLabel control={<Switch name="is_active" defaultChecked={product.is_active !== false} />} label="Product Active" />
+      </Grid>
+    </Grid>
+  );
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        Products
-      </Typography>
-      <Tabs value={tab} onChange={(e, v) => setTab(v)} sx={{ mb: 2 }}>
-        <Tab label="Product List" />
-        <Tab label="Add New Jewelry" />
-      </Tabs>
-      {tab === 0 && (
-        <Box>
-          {loading ? (
-            <CircularProgress />
-          ) : error ? (
-            <Alert severity="error">{error}</Alert>
-          ) : (
-            <TableContainer component={Paper}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Category</TableCell>
-                    <TableCell>SKU</TableCell>
-                    <TableCell>Barcode</TableCell>
-                    <TableCell>Weight</TableCell>
-                    <TableCell>Purity</TableCell>
-                    <TableCell>Stock</TableCell>
-                    <TableCell>Selling Price</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {products.map((p) => (
-                    <TableRow key={p.id || p.sku}>
-                      <TableCell>{p.name}</TableCell>
-                      <TableCell>{p.category}</TableCell>
-                      <TableCell>{p.sku}</TableCell>
-                      <TableCell>{p.barcode}</TableCell>
-                      <TableCell>{p.weight}</TableCell>
-                      <TableCell>{p.purity}</TableCell>
-                      <TableCell>{p.stock_quantity}</TableCell>
-                      <TableCell>{p.selling_price}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+        <Typography variant="h4" gutterBottom>Products</Typography>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Filter by Purity</InputLabel>
+            <Select value={purityFilter} label="Filter by Purity" onChange={handleFilterChange}>
+              <MenuItem value=""><em>All</em></MenuItem>
+              <MenuItem value="18K">18K</MenuItem>
+              <MenuItem value="14K">14K</MenuItem>
+              <MenuItem value="22K">22K</MenuItem>
+              <MenuItem value="925">925 Silver</MenuItem>
+              <MenuItem value="950">950 Platinum</MenuItem>
+            </Select>
+          </FormControl>
+          <TextField label="Search Products" variant="outlined" size="small" value={searchTerm} onChange={handleSearchChange} />
+          {canAdd && <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenAddDialog}>Add Product</Button>}
         </Box>
+      </Box>
+
+      {errorAlert && <Alert severity="error" onClose={() => setErrorAlert('')} sx={{ mb: 2 }}>{errorAlert}</Alert>}
+      {isLoading && <CircularProgress />}
+      {queryError && !isLoading && <Alert severity="error">Failed to fetch products: {queryError.message}</Alert>}
+      
+      {!isLoading && !queryError && (
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Name</TableCell>
+                <TableCell>Category</TableCell>
+                <TableCell>Metal Type</TableCell>
+                <TableCell>Purity</TableCell>
+                <TableCell align="right">Selling Price (₹)</TableCell>
+                <TableCell align="right">Stock</TableCell>
+                {(canEdit || canDelete) && <TableCell align="center">Actions</TableCell>}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {products.map((product) => (
+                <TableRow key={product.id}>
+                  <TableCell>{product.name}</TableCell>
+                  <TableCell>{product.category}</TableCell>
+                  <TableCell>{product.metal_type}</TableCell>
+                  <TableCell>{product.purity}</TableCell>
+                  <TableCell align="right">{parseFloat(product.selling_price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                  <TableCell align="right">{product.stock_quantity}</TableCell>
+                  {(canEdit || canDelete) && (
+                    <TableCell align="center">
+                      {canEdit && <IconButton onClick={() => handleOpenEditDialog(product)} color="primary"><EditIcon /></IconButton>}
+                      {canDelete && <IconButton onClick={() => handleOpenDeleteDialog(product.id)} color="error"><DeleteIcon /></IconButton>}
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
-      {tab === 1 && (
-        <Box component="form" onSubmit={handleAddProduct} sx={{ maxWidth: 600, mt: 2 }}>
-          <Grid container spacing={2}>
-            {Object.keys(initialForm).map((key) => (
-              key !== 'is_active' ? (
-                <Grid item xs={12} sm={6} key={key}>
-                  <TextField
-                    label={key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                    name={key}
-                    value={form[key]}
-                    onChange={handleFormChange}
-                    fullWidth
-                  />
-                </Grid>
-              ) : null
-            ))}
-            <Grid item xs={12}>
-              <label>
-                <input
-                  type="checkbox"
-                  name="is_active"
-                  checked={form.is_active}
-                  onChange={handleFormChange}
-                />{' '}
-                Active
-              </label>
-            </Grid>
-            <Grid item xs={12}>
-              <Button type="submit" variant="contained" color="primary" disabled={loading}>
-                {loading ? 'Adding...' : 'Add Jewelry'}
-              </Button>
-            </Grid>
-            {error && (
-              <Grid item xs={12}>
-                <Alert severity="error">{error}</Alert>
-              </Grid>
-            )}
-            {success && (
-              <Grid item xs={12}>
-                <Alert severity="success">{success}</Alert>
-              </Grid>
-            )}
-          </Grid>
+
+      {/* Add/Edit Product Dialogs */}
+      <Dialog open={addDialogOpen || editDialogOpen} onClose={editDialogOpen ? handleCloseEditDialog : handleCloseAddDialog} maxWidth="md" fullWidth>
+        <DialogTitle>{editDialogOpen ? 'Edit Product' : 'Add New Product'}</DialogTitle>
+        <Box component="form" onSubmit={(e) => handleFormSubmit(e, editDialogOpen ? updateMutation : createMutation, editDialogOpen ? handleCloseEditDialog : handleCloseAddDialog, editDialogOpen)}>
+          <DialogContent>
+            {renderProductForm(editDialogOpen ? editingProduct : {})}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={editDialogOpen ? handleCloseEditDialog : handleCloseAddDialog}>Cancel</Button>
+            <Button type="submit" disabled={createMutation.isLoading || updateMutation.isLoading}>
+              {editDialogOpen ? (updateMutation.isLoading ? 'Saving...' : 'Save Changes') : (createMutation.isLoading ? 'Adding...' : 'Add Product')}
+            </Button>
+          </DialogActions>
         </Box>
-      )}
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={handleCloseDeleteDialog}>
+        <DialogTitle>Delete Product?</DialogTitle>
+        <DialogContent><DialogContentText>Are you sure you want to delete this product? This action cannot be undone.</DialogContentText></DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
+          <Button onClick={handleDeleteConfirm} color="error" disabled={deleteMutation.isLoading}>
+            {deleteMutation.isLoading ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
 
-export default Products; 
+export default Products;

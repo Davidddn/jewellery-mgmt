@@ -1,55 +1,63 @@
-const BaseModel = require('./BaseModel');
+const { DataTypes } = require('sequelize');
 
-class Customer extends BaseModel {
-  constructor() {
-    super('customers');
-  }
+module.exports = (sequelize, DataTypes) => {
+  const Customer = sequelize.define('Customer', {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true,
+      allowNull: false
+    },
+    name: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    email: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      unique: true,
+      validate: {
+        isEmail: true
+      }
+    },
+    phone: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      unique: true
+    },
+    address: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    date_of_birth: {
+      type: DataTypes.DATEONLY, // YYYY-MM-DD
+      allowNull: true
+    },
+    gender: {
+      type: DataTypes.ENUM('male', 'female', 'other'),
+      allowNull: true
+    },
+    loyalty_points: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0
+    },
+    total_spent: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+      defaultValue: 0.00
+    }
+  }, {
+    tableName: 'customers',
+    timestamps: true, // Adds createdAt and updatedAt
+    underscored: true // Use snake_case for column names (e.g., date_of_birth)
+  });
 
-  // Find customer by phone
-  async findByPhone(phone) {
-    return this.findOne({ phone });
-  }
+  // Define associations if any
+  Customer.associate = (models) => {
+    Customer.hasMany(models.Transaction, { foreignKey: 'customer_id', as: 'transactions' });
+    Customer.hasOne(models.Loyalty, { foreignKey: 'customer_id', as: 'loyalty' });
+  };
 
-  // Find customer by email
-  async findByEmail(email) {
-    return this.findOne({ email });
-  }
-
-  // Get customers with loyalty points
-  async getCustomersWithLoyalty() {
-    const sql = `SELECT * FROM ${this.tableName} WHERE loyalty_points > 0 ORDER BY loyalty_points DESC`;
-    return this.query(sql);
-  }
-
-  // Update loyalty points
-  async updateLoyaltyPoints(customerId, points) {
-    return this.update(customerId, { loyalty_points: points });
-  }
-
-  // Get top customers by total spent
-  async getTopCustomers(limit = 10) {
-    const sql = `SELECT * FROM ${this.tableName} ORDER BY total_spent DESC LIMIT ?`;
-    return this.query(sql, [limit]);
-  }
-
-  // Search customers by name or phone
-  async searchCustomers(searchTerm) {
-    const sql = `SELECT * FROM ${this.tableName} WHERE name LIKE ? OR phone LIKE ? OR email LIKE ?`;
-    const searchPattern = `%${searchTerm}%`;
-    return this.query(sql, [searchPattern, searchPattern, searchPattern]);
-  }
-
-  // Get customer statistics
-  async getCustomerStats() {
-    const sql = `
-      SELECT 
-        COUNT(*) as total_customers,
-        AVG(total_spent) as avg_spent,
-        SUM(loyalty_points) as total_loyalty_points
-      FROM ${this.tableName}
-    `;
-    return this.queryOne(sql);
-  }
-}
-
-module.exports = new Customer(); 
+  return Customer;
+};

@@ -1,22 +1,26 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const productController = require('../controllers/productController');
-const auth = require('../middleware/auth');
-const auditLogger = require('../middleware/auditLogger');
 
-// All routes require authentication
-router.use(auth);
+// Configure multer for file storage
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/'); // Make sure this folder exists
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+const upload = multer({ storage: storage });
 
-// Product CRUD operations
-router.post('/', auditLogger, productController.createProduct);
+// Apply the middleware to your create and update routes
+// 'image' should match the name attribute in your FormData
+router.post('/', upload.single('image'), productController.createProduct);
+router.put('/:id', upload.single('image'), productController.updateProduct);
+
+// Other routes...
 router.get('/', productController.getProducts);
-router.get('/barcode/:barcode', productController.getProductByBarcode);
-router.get('/:id', productController.getProductById);
-router.put('/:id', auditLogger, productController.updateProduct);
-router.delete('/:id', auditLogger, productController.deleteProduct);
+// ...
 
-// Stock management
-router.put('/:id/stock', auditLogger, productController.updateStock);
-router.get('/low-stock', productController.getLowStockProducts);
-
-module.exports = router; 
+module.exports = router;
