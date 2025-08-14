@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const hallmarkingController = require('../controllers/hallmarkingController');
-const auth = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 const auditLogger = require('../middleware/auditLogger');
 
 // All routes require authentication
-router.use(auth);
+router.use(protect);
 
 // Hallmarking CRUD operations
 router.post('/', auditLogger, hallmarkingController.createHallmarking);

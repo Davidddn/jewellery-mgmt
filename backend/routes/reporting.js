@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const reportingController = require('../controllers/reportingController');
-const auth = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 const checkRole = require('../middleware/checkRole');
 
 // All report routes are protected for admins and managers
-router.use(auth, checkRole(['admin', 'manager', 'sales', 'inventory']));
+router.use(protect, checkRole(['admin', 'manager', 'sales', 'inventory']));
 
 // --- Data routes for dashboard and report pages ---
 router.get('/daily-sales', reportingController.dailySalesDashboard);

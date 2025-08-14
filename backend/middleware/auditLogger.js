@@ -1,4 +1,4 @@
-const AuditLog = require('../models/AuditLog');
+const db = require('../models');
 
 module.exports = async (req, res, next) => {
   // Store original send method
@@ -11,7 +11,7 @@ module.exports = async (req, res, next) => {
     
     // Log the action after response is sent
     if (['POST', 'PUT', 'DELETE'].includes(req.method) && req.user) {
-      AuditLog.create({
+      db.AuditLog.create({
         user_id: req.user.id,
         action: `${req.method} ${req.originalUrl}`,
         entity: req.baseUrl.replace('/api/', ''),

@@ -6,11 +6,11 @@ const {
     updateStock,
     getInventorySummary
 } = require('../controllers/inventoryController');
-const auth = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 const checkRole = require('../middleware/checkRole');
 
 // Protect all routes
-router.use(auth);
+router.use(protect);
 
 // This is the route that was likely causing the crash (around line 14)
 router.post('/scan', checkRole(['admin', 'inventory', 'sales']), scanItem);

@@ -11,5 +11,6 @@
             "username": "postgres",
             "connectionTimeout": 100
         }
-    ]
+    ],
+    "git.ignoreLimitWarning": true
 }

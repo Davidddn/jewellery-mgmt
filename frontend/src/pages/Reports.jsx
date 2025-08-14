@@ -16,22 +16,13 @@ import {
   CircularProgress,
   Alert,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
+  Select, MenuItem, InputLabel,
   FormControl,
-  FormLabel,
-  Select,
-  MenuItem,
-  InputLabel,
 } from '@mui/material';
 import { Download } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { reportsAPI } from '../api/reports';
+import DownloadModal from '../components/DownloadModal'; // Import DownloadModal
 import {
   LineChart,
   Line,
@@ -69,87 +60,14 @@ function TabPanel(props) {
   );
 }
 
-// Download Modal Component
-const DownloadModal = ({ open, onClose, title, options, onDownload }) => {
-  const [selectedValue, setSelectedValue] = useState(options.length > 0 ? options[0].value : '');
-  const [localDateRange, setLocalDateRange] = useState({ start_date: '', end_date: '' });
-  const [textInput, setTextInput] = useState('');
-
-  React.useEffect(() => {
-    if (options.length > 0) {
-      setSelectedValue(options[0].value);
-      setLocalDateRange({ start_date: '', end_date: '' });
-      setTextInput('');
-    }
-  }, [options]);
-
-  const handleValueChange = (event) => {
-    setSelectedValue(event.target.value);
-  };
-
-  const handleDateChange = (event) => {
-    setLocalDateRange({ ...localDateRange, [event.target.name]: event.target.value });
-  };
-  
-  const handleTextChange = (event) => {
-    setTextInput(event.target.value);
-  };
-
-  const handleDownloadClick = () => {
-    let params = { type: selectedValue };
-    const selectedOption = options.find(o => o.value === selectedValue);
-    if (selectedOption.needsDateRange) {
-        params = { ...params, ...localDateRange };
-    }
-    if (selectedOption.needsTextInput) {
-        params = { ...params, [selectedOption.textInputName]: textInput };
-    }
-    onDownload(params);
-    onClose();
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>{title}</DialogTitle>
-      <DialogContent>
-        <FormControl component="fieldset" sx={{ mt: 2, width: '100%' }}>
-          <FormLabel component="legend">Select Download Option</FormLabel>
-          <RadioGroup value={selectedValue} onChange={handleValueChange}>
-            {options.map((option) => (
-              <Box key={option.value}>
-                <FormControlLabel value={option.value} control={<Radio />} label={option.label} />
-                {selectedValue === option.value && option.needsDateRange && (
-                  <Box sx={{ display: 'flex', gap: 2, my: 1, ml: 4 }}>
-                    <TextField name="start_date" label="Start Date" type="date" value={localDateRange.start_date} onChange={handleDateChange} InputLabelProps={{ shrink: true }} fullWidth />
-                    <TextField name="end_date" label="End Date" type="date" value={localDateRange.end_date} onChange={handleDateChange} InputLabelProps={{ shrink: true }} fullWidth />
-                  </Box>
-                )}
-                {selectedValue === option.value && option.needsTextInput && (
-                    <Box sx={{ my: 1, ml: 4 }}>
-                        <TextField label={option.textInputLabel} value={textInput} onChange={handleTextChange} fullWidth />
-                    </Box>
-                )}
-              </Box>
-            ))}
-          </RadioGroup>
-        </FormControl>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleDownloadClick} variant="contained" startIcon={<Download />}>Download</Button>
-      </DialogActions>
-    </Dialog>
-  );
-};
-
-
 const Reports = () => {
   const [currentTab, setCurrentTab] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [downloadError, setDownloadError] = useState(null);
+  const [downloadFormat, setDownloadFormat] = useState('csv');
 
   // State for filters
-  const [salesFilters, setSalesFilters] = useState({ type: 'all', start_date: '', end_date: '' });
+  const [salesFilters, setSalesFilters] = useState({ type: 'all', start_date: '', end_date: '', name: '' });
   const [inventoryFilters, setInventoryFilters] = useState({ type: 'all', category: '' });
   const [customerFilters, setCustomerFilters] = useState({ type: 'all', start_date: '', end_date: '', name: '' });
 
@@ -194,9 +112,9 @@ const Reports = () => {
     setDownloadError(null);
     try {
         switch (currentTab) {
-            case 0: await reportsAPI.downloadSalesReport(params); break;
-            case 1: await reportsAPI.downloadInventoryReport(params); break;
-            case 2: await reportsAPI.downloadCustomerReport(params); break;
+            case 0: await reportsAPI.downloadSalesReport(params, downloadFormat); break;
+            case 1: await reportsAPI.downloadInventoryReport(params, downloadFormat); break;
+            case 2: await reportsAPI.downloadCustomerReport(params, downloadFormat); break;
             default: break;
         }
     } catch (error) {
@@ -245,9 +163,22 @@ const Reports = () => {
         <Typography variant="h4" gutterBottom sx={{ mb: 0 }}>
           Reports
         </Typography>
-        <Button variant="contained" startIcon={<Download />} onClick={() => setModalOpen(true)}>
-          Download Report
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <FormControl sx={{ minWidth: 150 }}>
+            <InputLabel>Download Format</InputLabel>
+            <Select
+              value={downloadFormat}
+              onChange={(e) => setDownloadFormat(e.target.value)}
+              label="Download Format"
+            >
+              <MenuItem value="csv">CSV</MenuItem>
+              <MenuItem value="pdf">PDF</MenuItem>
+            </Select>
+          </FormControl>
+          <Button variant="contained" startIcon={<Download />} onClick={() => setModalOpen(true)}>
+            Download Report
+          </Button>
+        </Box>
       </Box>
       
       {downloadError && <Alert severity="error" onClose={() => setDownloadError(null)}>{downloadError}</Alert>}
@@ -281,15 +212,47 @@ const Reports = () => {
           {salesError && <Alert severity="error">Failed to load sales data: {salesError.message}</Alert>}
           {salesData && (
             <Grid container spacing={3}>
-              <Grid size={{ xs: 12 }}>
+              <Grid item xs={12}>
                 <Typography variant="h6">Sales Overview</Typography>
-                <Paper sx={{ p: 2, mt: 2, height: { xs: 300, md: 500 } }}>
-                  <ResponsiveContainer width="100%" height="100%"><LineChart data={salesData.report?.dailySales} margin={{ top: 5, right: 30, left: 50, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" /><YAxis tickFormatter={formatCurrency}><Label value="Total Sales (₹)" angle={-90} position="insideLeft" style={{ textAnchor: 'middle' }} /></YAxis><Tooltip formatter={(value) => formatCurrency(value)} /><Legend /><Line type="monotone" dataKey="total_sales" stroke="#8884d8" activeDot={{ r: 8 }} name="Total Sales" /></LineChart></ResponsiveContainer>
+                <Paper sx={{ p: 2, mt: 2, height: { xs: 300, md: 500 },width: { xs: 300, md: 1150 } }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={salesData.report?.dailySales} margin={{ top: 5, right: 30, left: 50, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis tickFormatter={formatCurrency}>
+                        <Label value="Total Sales (₹)" angle={-90} position="insideLeft" style={{ textAnchor: 'middle' }} />
+                      </YAxis>
+                      <Tooltip formatter={(value) => formatCurrency(value)} />
+                      <Legend />
+                      <Line type="monotone" dataKey="total_sales" stroke="#8884d8" activeDot={{ r: 8 }} name="Total Sales" />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </Paper>
               </Grid>
-              <Grid size={{ xs: 12 }}>
-                <Typography variant="h6" sx={{ mt: 4 }}>Transactions</Typography>
-                <TableContainer component={Paper} sx={{ mt: 2 }}><Table><TableHead><TableRow><TableCell>Transaction ID</TableCell><TableCell>Customer</TableCell><TableCell>Date</TableCell><TableCell>Payment Method</TableCell><TableCell align="right">Total Amount</TableCell></TableRow></TableHead><TableBody>{salesData.report?.allTransactions.map((transaction) => (<TableRow key={transaction.id}><TableCell>{transaction.id}</TableCell><TableCell>{transaction.customer?.name || 'N/A'}</TableCell><TableCell>{new Date(transaction.created_at).toLocaleDateString()}</TableCell><TableCell>{transaction.payment_method}</TableCell><TableCell align="right">{formatCurrency(transaction.final_amount)}</TableCell></TableRow>))}</TableBody></Table></TableContainer>
+              <Grid item xs={12}>
+                <Typography variant="h6" sx={{ mt: 4 }}>Sales Details</Typography>
+                <TableContainer component={Paper} sx={{ mt: 2 }}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Date</TableCell>
+                        <TableCell>Product Name</TableCell>
+                        <TableCell align="right">Quantity</TableCell>
+                        <TableCell align="right">Amount</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {salesData.report?.sales && salesData.report.sales.map((item, index) => (
+                        <TableRow key={index}>
+                          <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
+                          <TableCell>{item.productName}</TableCell>
+                          <TableCell align="right">{item.totalQuantity}</TableCell>
+                          <TableCell align="right">{formatCurrency(item.totalAmount)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </Grid>
             </Grid>
           )}
@@ -316,11 +279,11 @@ const Reports = () => {
             <Grid container spacing={3}>
               <Grid size={{ xs: 12 }}>
                 <Typography variant="h6">Stock by Category</Typography>
-                <Paper sx={{ p: 2, mt: 2, height: { xs: 300, md: 500 } }}><ResponsiveContainer width="100%" height="100%"><BarChart data={inventoryData.report?.categoryBreakdown} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="category" /><YAxis><Label value="Total Stock" angle={-90} position="insideLeft" style={{ textAnchor: 'middle' }} /></YAxis><Tooltip /><Legend /><Bar dataKey="totalStock" fill="#82ca9d" name="Total Stock" /></BarChart></ResponsiveContainer></Paper>
+                <Paper sx={{ p: 2, mt: 2, height: { xs: 300, md: 500 }, width: { xs: 300, md: 1150 } }}><ResponsiveContainer width="100%" height="100%"><BarChart data={inventoryData.report?.categoryBreakdown} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="category" /><YAxis><Label value="Total Stock" angle={-90} position="insideLeft" style={{ textAnchor: 'middle' }} /></YAxis><Tooltip /><Legend /><Bar dataKey="totalStock" fill="#82ca9d" name="Total Stock" /></BarChart></ResponsiveContainer></Paper>
               </Grid>
               <Grid size={{ xs: 12 }}>
                 <Typography variant="h6" sx={{ mt: 4 }}>Products</Typography>
-                <TableContainer component={Paper} sx={{ mt: 2 }}><Table stickyHeader><TableHead><TableRow><TableCell>Product</TableCell><TableCell>Category</TableCell><TableCell align="right">Stock</TableCell><TableCell align="right">Price</TableCell></TableRow></TableHead><TableBody>{inventoryData.report?.products.map((product) => (<TableRow key={product.id}><TableCell>{product.name}</TableCell><TableCell>{product.category}</TableCell><TableCell align="right">{product.stock_quantity}</TableCell><TableCell align="right">{formatCurrency(product.selling_price)}</TableCell></TableRow>))}</TableBody></Table></TableContainer>
+                <TableContainer component={Paper} sx={{ mt: 2 }}><Table stickyHeader><TableHead><TableRow><TableCell>Product</TableCell><TableCell>Category</TableCell><TableCell align="right">Stock</TableCell><TableCell align="right">Price</TableCell></TableRow></TableHead><TableBody>{inventoryData.report?.products && inventoryData.report.products.map((product) => (<TableRow key={product.id}><TableCell>{product.name}</TableCell><TableCell>{product.category}</TableCell><TableCell align="right">{product.stock_quantity}</TableCell><TableCell align="right">{formatCurrency(product.selling_price)}</TableCell></TableRow>))}</TableBody></Table></TableContainer>
               </Grid>
             </Grid>
           )}
@@ -354,7 +317,7 @@ const Reports = () => {
             <Grid container spacing={3}>
               <Grid size={{ xs: 12 }}>
                 <Typography variant="h6">Customers</Typography>
-                <TableContainer component={Paper} sx={{ mt: 2 }}><Table><TableHead><TableRow><TableCell>Customer Name</TableCell><TableCell>Email</TableCell><TableCell>Phone</TableCell><TableCell align="right">Total Spent</TableCell></TableRow></TableHead><TableBody>{customerData.analytics?.customers.map((customer) => (<TableRow key={customer.id}><TableCell>{customer.name}</TableCell><TableCell>{customer.email}</TableCell><TableCell>{customer.phone}</TableCell><TableCell align="right">{formatCurrency(customer.total_spent)}</TableCell></TableRow>))}</TableBody></Table></TableContainer>
+                <TableContainer component={Paper} sx={{ mt: 2 }}><Table><TableHead><TableRow><TableCell>Customer Name</TableCell><TableCell>Email</TableCell><TableCell>Phone</TableCell><TableCell align="right">Total Spent</TableCell></TableRow></TableHead><TableBody>{customerData.analytics?.customers && customerData.analytics.customers.map((customer) => (<TableRow key={customer.id}><TableCell>{customer.name}</TableCell><TableCell>{customer.email}</TableCell><TableCell>{customer.phone}</TableCell><TableCell align="right">{formatCurrency(customer.total_spent)}</TableCell></TableRow>))}</TableBody></Table></TableContainer>
               </Grid>
             </Grid>
           )}
@@ -364,9 +327,9 @@ const Reports = () => {
       <DownloadModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={getModalTitle()}
-        options={getDownloadOptions()}
         onDownload={handleDownload}
+        options={getDownloadOptions()}
+        title={getModalTitle()}
       />
     </Box>
   );

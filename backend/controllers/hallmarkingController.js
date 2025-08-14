@@ -1,9 +1,8 @@
-const Hallmarking = require('../models/Hallmarking');
-const Product = require('../models/Product');
+const { Hallmarking, Product } = require('../models');
 
 exports.createHallmarking = async (req, res) => {
   try {
-    const { product_id, bis_certificate_no, assay_center, date_of_certification } = req.body;
+    const { product_id, hallmark_number, certifying_authority, certification_date } = req.body;
     
     // Check if product exists
     const product = await Product.findByPk(product_id);
@@ -25,9 +24,9 @@ exports.createHallmarking = async (req, res) => {
     
     const hallmarking = await Hallmarking.create({
       product_id,
-      bis_certificate_no,
-      assay_center,
-      date_of_certification: new Date(date_of_certification)
+      hallmark_number,
+      certifying_authority,
+      certification_date: new Date(certification_date)
     });
     
     res.status(201).json({
@@ -72,16 +71,18 @@ exports.getAllHallmarking = async (req, res) => {
     const hallmarking = await Hallmarking.findAll({
       include: [{
         model: Product,
-        attributes: ['name', 'barcode', 'purity']
+        as: 'product',
+        attributes: ['name', 'purity'] // Include necessary product attributes
       }],
-      order: [['date_of_certification', 'DESC']]
+      order: [['certification_date', 'DESC']]
     });
-    
+
     res.json({
       success: true,
       hallmarking
     });
   } catch (err) {
+    console.error("Error in getAllHallmarking:", err);
     res.status(500).json({
       success: false,
       message: err.message

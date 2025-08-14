@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import {
   Grid, Card, CardContent, Typography, Box, CircularProgress, Alert, List, ListItem, ListItemText, Avatar, Divider, TextField, Button, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogActions, Chip
 } from '@mui/material';
-import { Inventory, Receipt, TrendingUp, Group } from '@mui/icons-material';
+import { Inventory, Receipt, TrendingUp, Group, VerifiedUser, Loyalty as LoyaltyIcon } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { reportsAPI } from '../api/reports';
 import { goldRateAPI } from '../api/goldRate';
+import { hallmarkingAPI } from '../api/hallmarking';
 import { useAuth } from '../contexts/useAuth';
 
 // StatCard Component
@@ -67,7 +68,7 @@ const UpdateRatesDialog = ({ open, onClose, rates }) => {
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth disableRestoreFocus={false} disableEnforceFocus={false}>
             <DialogTitle>Update Gold Rates</DialogTitle>
             <DialogContent>
                 <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
@@ -125,7 +126,7 @@ const GoldRatesComparison = ({ open, onClose, liveRates, manualRates }) => {
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth disableRestoreFocus={false} disableEnforceFocus={false}>
             <DialogTitle>Compare Gold Rates</DialogTitle>
             <DialogContent>
                 <Grid container spacing={2}>
@@ -177,11 +178,32 @@ const GoldRatesComparison = ({ open, onClose, liveRates, manualRates }) => {
 };
 
 // GoldRateCard with Manual Input as Popup
-const GoldRateCard = ({ rates, isLoading, error }) => {
-    const { user } = useAuth();
+const GoldRateCard = ({ goldData, isLoading, error }) => {
+    const authContext = useAuth(); // Get the whole context object
+    const { user } = authContext; // Destructure user from the context object
+    const queryClient = useQueryClient(); // Add queryClient here
     const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
     const [comparisonDialogOpen, setComparisonDialogOpen] = useState(false);
     
+    const rates = goldData?.rates; // Extract rates from goldData
+    const source = goldData?.source; // Extract source from goldData
+
+    const liveRates = source === 'live-api' ? rates : null;
+    const manualRates = (source === 'manual' || source === 'manual-fallback') ? rates : null;
+
+    const resetRatesMutation = useMutation({
+        mutationFn: goldRateAPI.resetGoldRates,
+        onSuccess: (data) => {
+            console.log("Reset successful:", data); // Add this line
+            queryClient.invalidateQueries(['goldRate']);
+            // Optionally show a success message
+        },
+        onError: (err) => {
+            console.error("Failed to reset rates:", err); // Add this line
+            // Optionally show an error message
+        }
+    });
+
     return (
         <Card>
             <CardContent>
@@ -197,38 +219,68 @@ const GoldRateCard = ({ rates, isLoading, error }) => {
                   <List dense>
                     <ListItem disableGutters>
                       <ListItemText primary="24K Gold" />
-                      <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                        {rates['24K']?.rate 
-                          ? `₹${Number(rates['24K'].rate).toLocaleString('en-IN', {
-                              maximumFractionDigits: 2,
-                              minimumFractionDigits: 2
-                            })}` 
-                          : 'N/A'}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {rates['24K']?.source === 'live-api' && (
+                          <Box sx={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            bgcolor: 'error.main',
+                          }} />
+                        )}
+                        <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                          {rates['24K']?.rate 
+                            ? `₹${Number(rates['24K'].rate).toLocaleString('en-IN', {
+                                maximumFractionDigits: 2,
+                                minimumFractionDigits: 2
+                              })}` 
+                            : 'N/A'}
+                        </Typography>
+                      </Box>
                     </ListItem>
                     <Divider component="li" />
                     <ListItem disableGutters>
                       <ListItemText primary="22K Gold" />
-                      <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                        {rates['22K']?.rate 
-                          ? `₹${Number(rates['22K'].rate).toLocaleString('en-IN', {
-                              maximumFractionDigits: 2,
-                              minimumFractionDigits: 2
-                            })}` 
-                          : 'N/A'}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {rates['22K']?.source === 'live-api' && (
+                          <Box sx={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            bgcolor: 'error.main',
+                          }} />
+                        )}
+                        <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                          {rates['22K']?.rate 
+                            ? `₹${Number(rates['22K'].rate).toLocaleString('en-IN', {
+                                maximumFractionDigits: 2,
+                                minimumFractionDigits: 2
+                              })}` 
+                            : 'N/A'}
+                        </Typography>
+                      </Box>
                     </ListItem>
                     <Divider component="li" />
                     <ListItem disableGutters>
                       <ListItemText primary="18K Gold" />
-                      <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                        {rates['18K']?.rate 
-                          ? `₹${Number(rates['18K'].rate).toLocaleString('en-IN', {
-                              maximumFractionDigits: 2,
-                              minimumFractionDigits: 2
-                            })}` 
-                          : 'N/A'}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {rates['18K']?.source === 'live-api' && (
+                          <Box sx={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            bgcolor: 'error.main',
+                          }} />
+                        )}
+                        <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                          {rates['18K']?.rate 
+                            ? `₹${Number(rates['18K'].rate).toLocaleString('en-IN', {
+                                maximumFractionDigits: 2,
+                                minimumFractionDigits: 2
+                              })}` 
+                            : 'N/A'}
+                        </Typography>
+                      </Box>
                     </ListItem>
                   </List>
                 )}
@@ -247,6 +299,16 @@ const GoldRateCard = ({ rates, isLoading, error }) => {
                     >
                         Compare Rates
                     </Button>
+                    {user?.role === 'admin' && (
+                        <Button 
+                            variant="outlined" 
+                            color="secondary"
+                            onClick={() => resetRatesMutation.mutate()}
+                            disabled={resetRatesMutation.isLoading}
+                        >
+                            {resetRatesMutation.isLoading ? 'Resetting...' : 'Reset to Live Rates'}
+                        </Button>
+                    )}
                 </Box>
             </CardContent>
 
@@ -259,8 +321,8 @@ const GoldRateCard = ({ rates, isLoading, error }) => {
             <GoldRatesComparison
                 open={comparisonDialogOpen}
                 onClose={() => setComparisonDialogOpen(false)}
-                liveRates={rates?.source === 'live-api' ? rates : null}
-                manualRates={rates?.source === 'manual' ? rates : null}
+                liveRates={goldData?.liveApiRates}
+                manualRates={goldData?.manualDbRates}
             />
         </Card>
     );
@@ -278,7 +340,13 @@ const Dashboard = () => {
     queryFn: goldRateAPI.getGoldRates,
   });
 
-  if (isLoading) {
+  // Fetch hallmarking data
+  const { data: hallmarkingData, isLoading: isHallmarkingLoading, error: hallmarkingError } = useQuery({
+    queryKey: ['allHallmarking'],
+    queryFn: hallmarkingAPI.getHallmarking,
+  });
+
+  if (isLoading || isHallmarkingLoading) {
     return <Box display="flex" justifyContent="center" mt={4}><CircularProgress /></Box>;
   }
 
@@ -287,6 +355,7 @@ const Dashboard = () => {
   }
 
   const dashboardData = data?.dashboard || {};
+  const recentHallmarking = hallmarkingData?.hallmarking || [];
 
   return (
     <Box>
@@ -315,7 +384,7 @@ const Dashboard = () => {
           </Card>
         </Grid>
         <Grid item xs={12} lg={4}>
-            <GoldRateCard rates={goldData?.rates} isLoading={isGoldLoading} error={goldError?.message} />
+            <GoldRateCard goldData={goldData} isLoading={isGoldLoading} error={goldError?.message} />
             <Card sx={{ mt: 3 }}>
                 <CardContent>
                     <Typography variant="h6" gutterBottom>Low Stock Alerts</Typography>
@@ -337,6 +406,65 @@ const Dashboard = () => {
                     )}
                 </CardContent>
             </Card>
+        </Grid>
+      {/* Hallmarking Section */}
+        <Grid item xs={12} lg={6}>
+          <Card sx={{ height: '100%', mt: 3 }}>
+            <CardContent>
+              <Box display="flex" alignItems="center" mb={2}>
+                <Avatar sx={{ bgcolor: 'info.main', mr: 2 }}><VerifiedUser /></Avatar>
+                <Typography variant="h6">Recent Hallmarking Records</Typography>
+              </Box>
+              {isHallmarkingLoading && <CircularProgress size={24} />}
+              {hallmarkingError && <Alert severity="error">Failed to load hallmarking data: {hallmarkingError.message}</Alert>}
+              {!isHallmarkingLoading && !hallmarkingError && (
+                <List>
+                  {recentHallmarking.length > 0 ? (
+                    recentHallmarking.slice(0, 5).map((record) => (
+                      <ListItem key={record.id} disableGutters divider>
+                        <ListItemText 
+                          primary={`Hallmark No: ${record.hallmark_number}`}
+                          secondary={
+                            <React.Fragment>
+                              <Typography component="span" variant="body2" color="text.primary">
+                                {record.product?.name} ({record.product?.purity})
+                              </Typography>
+                              {` — Certified: ${new Date(record.certification_date).toLocaleDateString()}`}
+                            </React.Fragment>
+                          }
+                        />
+                      </ListItem>
+                    ))
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                      No recent hallmarking records found.
+                    </Typography>
+                  )}
+                </List>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Loyalty Program Section (Placeholder) */}
+        <Grid item xs={12} lg={6}>
+          <Card sx={{ height: '100%', mt: 3 }}>
+            <CardContent>
+              <Box display="flex" alignItems="center" mb={2}>
+                <Avatar sx={{ bgcolor: 'secondary.main', mr: 2 }}><LoyaltyIcon /></Avatar>
+                <Typography variant="h6">Loyalty Program Overview</Typography>
+              </Box>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+                Manage and view customer loyalty details.
+              </Typography>
+              <Button variant="contained" color="secondary" href="/loyalty" disabled>
+                Go to Loyalty Page (Coming Soon)
+              </Button>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                For detailed loyalty statistics, a backend summary endpoint would be beneficial.
+              </Typography>
+            </CardContent>
+          </Card>
         </Grid>
       </Grid>
     </Box>

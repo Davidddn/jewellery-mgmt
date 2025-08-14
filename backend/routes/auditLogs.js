@@ -4,11 +4,11 @@ const {
     getLogs,
     getAuditStats
 } = require('../controllers/auditLogController');
-const auth = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 const checkRole = require('../middleware/checkRole');
 
 // Protect all routes and restrict to admin
-router.use(auth, checkRole(['admin']));
+router.use(protect, checkRole(['admin']));
 
 // This is the route that was causing the crash (around line 11)
 router.get('/', getLogs);

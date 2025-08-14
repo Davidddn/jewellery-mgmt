@@ -1,8 +1,9 @@
 import React from 'react';
 import { AppBar, Toolbar, IconButton, Typography, Box, Avatar, Menu, MenuItem } from '@mui/material';
-import { Menu as MenuIcon, Logout as LogoutIcon } from '@mui/icons-material';
+import { Menu as MenuIcon, Logout as LogoutIcon, Brightness4, Brightness7 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/useAuth';
 import { useLocation } from 'react-router-dom';
+import { useCustomTheme } from '../../contexts/CustomThemeContext';
 
 const drawerWidth = 240;
 
@@ -10,6 +11,7 @@ const Header = ({ onSidebarToggle, isSidebarOpen }) => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [anchorEl, setAnchorEl] = React.useState(null);
+  const { mode, toggleTheme } = useCustomTheme();
 
   const handleMenu = (event) => setAnchorEl(event.currentTarget);
   const handleClose = () => setAnchorEl(null);
@@ -46,10 +48,13 @@ const Header = ({ onSidebarToggle, isSidebarOpen }) => {
         >
           <MenuIcon />
         </IconButton>
-        <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+        <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
           {getPageTitle()}
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <IconButton sx={{ ml: 1 }} onClick={toggleTheme} color="inherit">
+            {mode === 'dark' ? <Brightness7 /> : <Brightness4 />}
+          </IconButton>
           <Typography sx={{ mr: 1.5, display: { xs: 'none', sm: 'block' } }}>{user?.firstName || 'User'}</Typography>
           <IconButton onClick={handleMenu} sx={{ p: 0 }}>
             <Avatar>{user?.firstName?.charAt(0) || 'U'}</Avatar>

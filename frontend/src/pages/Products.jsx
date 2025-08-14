@@ -14,6 +14,10 @@ const Products = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [purityFilter, setPurityFilter] = useState('');
   const [errorAlert, setErrorAlert] = useState('');
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
 
   // Dialog states
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -134,6 +138,32 @@ const Products = () => {
   const handleCloseDeleteDialog = () => setDeleteDialogOpen(false);
   const handleDeleteConfirm = () => deleteMutation.mutate(deletingProductId);
 
+  const handleFileChange = (event) => {
+    setSelectedFile(event.target.files[0]);
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      setErrorAlert('Please select a file to upload.');
+      return;
+    }
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('csv', selectedFile);
+
+    try {
+      const result = await productsAPI.uploadCSV(formData);
+      setUploadResult(result);
+      queryClient.invalidateQueries(['products']);
+    } catch (error) {
+      setErrorAlert(error.response?.data?.message || 'Failed to upload CSV.');
+    } finally {
+      setUploading(false);
+      setUploadDialogOpen(false);
+    }
+  };
+
   const products = data?.products || [];
 
   // This form now reflects the fields in your seed-data.sql and Product.js model
@@ -144,8 +174,43 @@ const Products = () => {
       <Grid item xs={12} sm={6}><TextField name="category" label="Category" fullWidth defaultValue={product.category} /></Grid>
       <Grid item xs={12} sm={6}><TextField name="subcategory" label="Subcategory" fullWidth defaultValue={product.subcategory} /></Grid>
       <Grid item xs={12} sm={6}><TextField name="barcode" label="Barcode" fullWidth defaultValue={product.barcode} /></Grid>
-      <Grid item xs={12} sm={6}><TextField name="metal_type" label="Metal Type" fullWidth required defaultValue={product.metal_type} /></Grid>
-      <Grid item xs={12} sm={6}><TextField name="purity" label="Purity (e.g., 22K, 925)" fullWidth defaultValue={product.purity} /></Grid>
+      <Grid item xs={12} sm={6}>
+        <FormControl fullWidth>
+          <InputLabel>Metal Type</InputLabel>
+          <Select
+            name="metal_type"
+            label="Metal Type"
+            defaultValue={product.metal_type || ''}
+            required
+          >
+            <MenuItem value=""><em>None</em></MenuItem>
+            <MenuItem value="Gold">Gold</MenuItem>
+            <MenuItem value="Silver">Silver</MenuItem>
+            <MenuItem value="Platinum">Platinum</MenuItem>
+            <MenuItem value="Diamond">Diamond</MenuItem>
+            <MenuItem value="Other">Other</MenuItem>
+          </Select>
+        </FormControl>
+      </Grid>
+      <Grid item xs={12} sm={6}>
+        <FormControl fullWidth>
+          <InputLabel>Purity</InputLabel>
+          <Select
+            name="purity"
+            label="Purity"
+            defaultValue={product.purity || ''}
+          >
+            <MenuItem value=""><em>None</em></MenuItem>
+            <MenuItem value="24K">24K</MenuItem>
+            <MenuItem value="22K">22K</MenuItem>
+            <MenuItem value="18K">18K</MenuItem>
+            <MenuItem value="14K">14K</MenuItem>
+            <MenuItem value="10K">10K</MenuItem>
+            <MenuItem value="925">925 (Silver)</MenuItem>
+            <MenuItem value="PT950">PT950 (Platinum)</MenuItem>
+          </Select>
+        </FormControl>
+      </Grid>
       <Grid item xs={12} sm={6}><TextField name="weight" label="Weight (grams)" type="number" fullWidth defaultValue={product.weight} /></Grid>
       <Grid item xs={12} sm={6}><TextField name="stone_type" label="Stone Type" fullWidth defaultValue={product.stone_type} /></Grid>
       <Grid item xs={12} sm={6}><TextField name="stone_weight" label="Stone Weight (carats)" type="number" fullWidth defaultValue={product.stone_weight} /></Grid>
@@ -196,6 +261,7 @@ const Products = () => {
           </FormControl>
           <TextField label="Search Products" variant="outlined" size="small" value={searchTerm} onChange={handleSearchChange} />
           {canAdd && <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenAddDialog}>Add Product</Button>}
+          {canAdd && <Button variant="contained" startIcon={<UploadIcon />} onClick={() => setUploadDialogOpen(true)}>Upload CSV</Button>}
         </Box>
       </Box>
 
@@ -209,6 +275,8 @@ const Products = () => {
             <TableHead>
               <TableRow>
                 <TableCell>Name</TableCell>
+                <TableCell>SKU</TableCell>
+                <TableCell>Barcode</TableCell>
                 <TableCell>Category</TableCell>
                 <TableCell>Metal Type</TableCell>
                 <TableCell>Purity</TableCell>
@@ -221,6 +289,8 @@ const Products = () => {
               {products.map((product) => (
                 <TableRow key={product.id}>
                   <TableCell>{product.name}</TableCell>
+                  <TableCell>{product.sku}</TableCell>
+                  <TableCell>{product.barcode}</TableCell>
                   <TableCell>{product.category}</TableCell>
                   <TableCell>{product.metal_type}</TableCell>
                   <TableCell>{product.purity}</TableCell>
@@ -264,6 +334,42 @@ const Products = () => {
           <Button onClick={handleDeleteConfirm} color="error" disabled={deleteMutation.isLoading}>
             {deleteMutation.isLoading ? 'Deleting...' : 'Delete'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Upload CSV Dialog */}
+      <Dialog open={uploadDialogOpen} onClose={() => setUploadDialogOpen(false)}>
+        <DialogTitle>Upload CSV</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Select a CSV file to upload. The CSV should have a header row with column names matching the product fields.
+          </DialogContentText>
+          <Button variant="contained" component="label" fullWidth sx={{ mt: 2 }}>
+            Select File
+            <input type="file" hidden accept=".csv" onChange={handleFileChange} />
+          </Button>
+          {selectedFile && <Typography sx={{ mt: 2 }}>{selectedFile.name}</Typography>}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setUploadDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleUpload} disabled={uploading || !selectedFile}>
+            {uploading ? 'Uploading...' : 'Upload'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Upload Result Dialog */}
+      <Dialog open={!!uploadResult} onClose={() => setUploadResult(null)}>
+        <DialogTitle>Upload Result</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {uploadResult?.message}
+          </DialogContentText>
+          <Typography>Created: {uploadResult?.created}</Typography>
+          <Typography>Updated: {uploadResult?.updated}</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setUploadResult(null)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

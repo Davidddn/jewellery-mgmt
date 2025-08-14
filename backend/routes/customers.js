@@ -1,32 +1,42 @@
 const express = require('express');
 const router = express.Router();
-const {
-  createCustomer,
-  getCustomers,
-  getCustomerById,
-  updateCustomer, // Ensure this is imported correctly
-  deleteCustomer,
-  getCustomerByPhone,
-} = require('../controllers/customerController');
-const auth = require('../middleware/auth');
-const checkRole = require('../middleware/checkRole');
+const multer = require('multer');
+const customerController = require('../controllers/customerController');
 
-// All routes below this will be protected by the auth middleware
-router.use(auth);
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+const upload = multer({ storage: storage });
 
-// Routes for creating and getting all customers
-router.route('/')
-  .post(checkRole(['admin', 'manager', 'sales']), createCustomer)
-  .get(getCustomers);
+// Search customers - THIS IS THE KEY ROUTE for your Sales component
+router.get('/search', customerController.searchCustomers);
 
-// Routes for a single customer by ID
-router.route('/:id')
-  .get(getCustomerById)
-  // This is the line that was causing the crash (around line 19)
-  .put(checkRole(['admin', 'manager']), updateCustomer) 
-  .delete(checkRole(['admin']), deleteCustomer);
+// Get all customers
+router.get('/', customerController.getCustomers);
 
-// Route to get customer by phone number
-router.get('/phone/:phone', getCustomerByPhone);
+// Get customer by phone
+router.get('/phone/:phone', customerController.getCustomerByPhone);
+
+// Get customer by email
+router.get('/email/:email', customerController.getCustomerByEmail);
+
+// Get customer by ID
+router.get('/:id', customerController.getCustomerById);
+
+// Create new customer
+router.post('/', customerController.createCustomer);
+
+// Update customer
+router.put('/:id', customerController.updateCustomer);
+
+// Delete customer
+router.delete('/:id', customerController.deleteCustomer);
+
+router.post('/upload/csv', upload.single('csv'), customerController.uploadCSV);
 
 module.exports = router;

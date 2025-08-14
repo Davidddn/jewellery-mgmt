@@ -66,3 +66,15 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+@media (min-width: 768px) {
+  :root {
+    font-size: 18px; /* Adjust base font size for tablets and larger */
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    font-size: 20px; /* Adjust base font size for desktops */
+  }
+}

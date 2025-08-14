@@ -19,7 +19,7 @@ const seedDatabase = async () => {
       { username: 'sales', email: 'sales@example.com', password: 'password123', firstName: 'Sales', lastName: 'Rep', role: 'sales' },
       { username: 'inventory', email: 'inventory@example.com', password: 'password123', firstName: 'Inventory', lastName: 'Clerk', role: 'inventory' },
     ];
-    await User.bulkCreate(usersData);
+    await User.bulkCreate(usersData, { individualHooks: true });
     console.log('Users seeded successfully.');
 
     // --- Create Customers ---

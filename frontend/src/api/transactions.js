@@ -100,9 +100,19 @@ export const transactionsAPI = {
   },
 
   // Get invoice
-  getInvoice: async (id) => {
-    const response = await api.get(`/transactions/${id}/invoice`);
-    return response.data;
+  getInvoice: async (id, format = 'pdf') => {
+    const config = { params: { format } };
+    if (format === 'csv') {
+      config.responseType = 'blob'; // Important for CSV download
+    }
+    try {
+      const response = await api.get(`/transactions/${id}/invoice`, config);
+      console.log('API Response for invoice:', response);
+      return response;
+    } catch (error) {
+      console.error('API Error in getInvoice:', error);
+      throw error;
+    }
   },
 
   // Get EMI details
@@ -115,5 +125,14 @@ export const transactionsAPI = {
   updateEMIPayment: async (id, paymentData) => {
     const response = await api.post(`/transactions/${id}/emi-payment`, paymentData);
     return response.data;
-  }
+  },
+
+  uploadCSV: async (formData) => {
+    const response = await api.post('/transactions/upload/csv', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
 }; 

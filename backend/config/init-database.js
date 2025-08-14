@@ -19,7 +19,7 @@ const initializeDatabase = async () => {
     // Force sync in development only
     const syncOptions = {
       force: process.env.NODE_ENV === 'development',
-      alter: false
+      alter: true
     };
 
     // Sync models with { alter: true }

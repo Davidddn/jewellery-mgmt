@@ -14,7 +14,7 @@ const Layout = () => {
   };
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '300vh', bgcolor: 'background.default' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
       <CssBaseline />
       <Header onSidebarToggle={handleSidebarToggle} isSidebarOpen={isSidebarOpen} />
       <Sidebar isOpen={isSidebarOpen} onClose={() => setSidebarOpen(false)} />

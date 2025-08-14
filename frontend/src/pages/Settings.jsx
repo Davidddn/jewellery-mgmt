@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/useAuth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authAPI } from '../api/auth';
 import { usersAPI } from '../api/users';
+import { settingsAPI } from '../api/settings';
 import { useForm, Controller } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -60,6 +61,10 @@ const Settings = () => {
   const [editingUser, setEditingUser] = useState(null);
   const [userFilters, setUserFilters] = useState({ name: '', role: 'all', status: 'all' });
 
+  // New state for logo
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreview, setLogoPreview] = useState('');
+
   // --- Forms ---
   const { control: profileControl, handleSubmit: handleProfileSubmit, reset: resetProfileForm, formState: { errors: profileErrors } } = useForm({
     resolver: yupResolver(profileSchema),
@@ -93,6 +98,17 @@ const Settings = () => {
     queryFn: () => usersAPI.getAllUsers(userFilters),
     enabled: user?.role === 'admin',
   });
+
+  const { data: logoData, isLoading: isLogoLoading } = useQuery({
+    queryKey: ['logo'],
+    queryFn: () => settingsAPI.getLogo(),
+  });
+
+  useEffect(() => {
+    if (logoData?.logoUrl) {
+      setLogoPreview(logoData.logoUrl);
+    }
+  }, [logoData]);
 
   // --- Mutations ---
   const updateProfileMutation = useMutation({
@@ -143,11 +159,39 @@ const Settings = () => {
     onError: (err) => setErrorAlert(err.response?.data?.message || 'Failed to delete user.'),
   });
 
+  const uploadLogoMutation = useMutation({
+    mutationFn: (file) => settingsAPI.uploadLogo(file),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['logo']);
+      setSuccessAlert('Logo updated successfully!');
+      setLogoFile(null);
+    },
+    onError: (err) => setErrorAlert(err.response?.data?.message || 'Failed to upload logo.'),
+  });
+
   // --- Event Handlers ---
   const handleTabChange = (event, newValue) => {
     setCurrentTab(newValue);
     setErrorAlert('');
     setSuccessAlert('');
+  };
+
+  const handleLogoChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setLogoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleLogoUpload = () => {
+    if (logoFile) {
+      uploadLogoMutation.mutate(logoFile);
+    }
   };
 
   const handleUserFilterChange = (e) => {
@@ -202,13 +246,40 @@ const Settings = () => {
       <Typography variant="h4" gutterBottom>Settings</Typography>
       <Paper>
         <Tabs value={currentTab} onChange={handleTabChange}>
+          <Tab label="General" />
           <Tab label="Profile" />
           <Tab label="Security" />
           {user?.role === 'admin' && <Tab label="User Management" />}
+          {user?.role === 'admin' && <Tab label="Data Management" />}
         </Tabs>
 
-        {/* Profile Settings */}
+        {/* General Settings */}
         <TabPanel value={currentTab} index={0}>
+          <Typography variant="h6" gutterBottom>General Settings</Typography>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle1" gutterBottom>Company Logo</Typography>
+            <Box sx={{ my: 2, border: '1px dashed grey', p: 2, width: 'fit-content' }}>
+              {isLogoLoading ? <CircularProgress /> : (
+                <img src={logoPreview || 'https://via.placeholder.com/200x100.png?text=No+Logo'} alt="Current Logo" style={{ maxWidth: '200px', maxHeight: '100px', display: 'block' }} />
+              )}
+            </Box>
+            <Button variant="contained" component="label">
+              Change Logo
+              <input type="file" hidden accept="image/*" onChange={handleLogoChange} />
+            </Button>
+            {logoFile && (
+              <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Typography>{logoFile.name}</Typography>
+                <Button variant="outlined" onClick={handleLogoUpload} disabled={uploadLogoMutation.isLoading}>
+                  {uploadLogoMutation.isLoading ? <CircularProgress size={24} /> : 'Save Logo'}
+                </Button>
+              </Box>
+            )}
+          </Box>
+        </TabPanel>
+
+        {/* Profile Settings */}
+        <TabPanel value={currentTab} index={1}>
           <Typography variant="h6" gutterBottom>My Profile</Typography>
           <Box component="form" onSubmit={handleProfileSubmit(onProfileSave)} noValidate sx={{ mt: 1 }}>
             <Grid container spacing={2}>
@@ -224,7 +295,7 @@ const Settings = () => {
         </TabPanel>
 
         {/* Security Settings */}
-        <TabPanel value={currentTab} index={1}>
+        <TabPanel value={currentTab} index={2}>
           <Typography variant="h6" gutterBottom>Change Password</Typography>
           <Box component="form" onSubmit={handlePasswordSubmit(onPasswordSave)} noValidate sx={{ mt: 1, maxWidth: 400 }}>
             <Controller name="currentPassword" control={passwordControl} render={({ field }) => <TextField {...field} fullWidth margin="normal" label="Current Password" type="password" error={!!passwordErrors.currentPassword} helperText={passwordErrors.currentPassword?.message} />} />
@@ -236,7 +307,7 @@ const Settings = () => {
 
         {/* User Management (Admin Only) */}
         {user?.role === 'admin' && (
-          <TabPanel value={currentTab} index={2}>
+          <TabPanel value={currentTab} index={3}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6">User List</Typography>
               <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenUserDialog()}>Add User</Button>
@@ -301,6 +372,21 @@ const Settings = () => {
                 </Table>
               </TableContainer>
             )}
+          </TabPanel>
+        )}
+
+        {user?.role === 'admin' && (
+          <TabPanel value={currentTab} index={4}>
+            <Typography variant="h6" gutterBottom>Data Management</Typography>
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body1" gutterBottom>
+                You can export various reports and data from the system in CSV format.
+                Please navigate to the <a href="/reports">Reports</a> section to download sales, inventory, and customer data.
+              </Typography>
+              <Button variant="contained" sx={{ mt: 2 }} onClick={() => window.location.href = '/reports'}>
+                Go to Reports
+              </Button>
+            </Box>
           </TabPanel>
         )}
         

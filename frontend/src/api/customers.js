@@ -13,10 +13,17 @@ export const customersAPI = {
     return response.data;
   },
 
-  // Get customer by phone
+  // Get customer by phone - Updated to match Sales component expectations
   getCustomerByPhone: async (phone) => {
-    const response = await api.get(`/customers/phone/${phone}`);
-    return response.data;
+    try {
+      const response = await api.get(`/customers/phone/${phone}`);
+      return {
+        success: true,
+        customer: response.data.customer
+      };
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Customer not found by phone');
+    }
   },
 
   // Get customer by email
@@ -25,10 +32,20 @@ export const customersAPI = {
     return response.data;
   },
 
-  // Create new customer
+  // Create new customer - Updated to match Sales component expectations
   createCustomer: async (customerData) => {
-    const response = await api.post('/customers', customerData);
-    return response.data;
+    try {
+      const response = await api.post('/customers', customerData);
+      return {
+        success: true,
+        customer: response.data.customer
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to create customer'
+      };
+    }
   },
 
   // Update customer
@@ -55,10 +72,19 @@ export const customersAPI = {
     return response.data;
   },
 
-  // Search customers
+  // Search customers - Updated to match Sales component expectations
   searchCustomers: async (searchTerm) => {
-    const response = await api.get('/customers/search', { params: { q: searchTerm } });
-    return response.data;
+    try {
+      const response = await api.get('/customers/search', { 
+        params: { q: searchTerm } // Changed from 'search' to 'q' to match Sales component
+      });
+      return {
+        success: true,
+        customers: response.data.customers || []
+      };
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'No customers found');
+    }
   },
 
   // Get customer statistics
@@ -83,5 +109,14 @@ export const customersAPI = {
   sendSMS: async (id, message) => {
     const response = await api.post(`/customers/${id}/sms`, { message });
     return response.data;
-  }
-}; 
+  },
+
+  uploadCSV: async (formData) => {
+    const response = await api.post('/customers/upload/csv', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+};

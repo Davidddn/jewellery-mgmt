@@ -1,17 +1,16 @@
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthProvider';
-import { ThemeProvider } from '@mui/material/styles';
-import theme from './theme';
+import { CustomThemeProvider } from './contexts/CustomThemeContext';
 import AppRoutes from './routes';
 
 function App() {
   return (
-    <BrowserRouter>
-      <ThemeProvider theme={theme}>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <CustomThemeProvider>
         <AuthProvider>
           <AppRoutes />
         </AuthProvider>
-      </ThemeProvider>
+      </CustomThemeProvider>
     </BrowserRouter>
   );
 }

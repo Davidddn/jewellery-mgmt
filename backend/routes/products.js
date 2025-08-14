@@ -16,11 +16,15 @@ const upload = multer({ storage: storage });
 
 // Apply the middleware to your create and update routes
 // 'image' should match the name attribute in your FormData
-router.post('/', upload.single('image'), productController.createProduct);
-router.put('/:id', upload.single('image'), productController.updateProduct);
+router.post('/', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'back_image', maxCount: 1 }]), productController.createProduct);
+router.put('/:id', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'back_image', maxCount: 1 }]), productController.updateProduct);
+router.post('/upload/csv', upload.single('csv'), productController.uploadCSV);
 
 // Other routes...
+router.get('/search', productController.searchProducts);
 router.get('/', productController.getProducts);
-// ...
+router.get('/barcode/:barcode', productController.getProductByBarcode);
+router.get('/sku/:sku', productController.getProductBySku);
+router.delete('/:id', productController.deleteProduct);
 
 module.exports = router;

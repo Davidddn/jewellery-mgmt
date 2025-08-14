@@ -65,17 +65,18 @@ export const reportsAPI = {
   // --- Download Functions ---
 
   /**
-   * Downloads a sales report as a CSV file.
+   * Downloads a sales report as a CSV or PDF file.
    * @param {object} params - The query parameters for the report.
+   * @param {string} format - The format of the report (csv or pdf).
    * @returns {Promise<void>}
    */
-  downloadSalesReport: async (params = {}) => {
-    const response = await api.get('/reports/download/sales', { 
+  downloadSalesReport: async (params = {}, format = 'csv') => {
+    const response = await api.get(`/reports/download/sales?format=${format}`, { 
       params, 
       responseType: 'blob' 
     });
     const contentDisposition = response.headers['content-disposition'];
-    let filename = 'sales-report.csv';
+    let filename = `sales-report.${format}`;
     if (contentDisposition) {
         const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
         const matches = filenameRegex.exec(contentDisposition);
@@ -87,17 +88,18 @@ export const reportsAPI = {
   },
 
   /**
-   * Downloads an inventory report as a CSV file.
+   * Downloads an inventory report as a CSV or PDF file.
    * @param {object} params - The query parameters for the report.
+   * @param {string} format - The format of the report (csv or pdf).
    * @returns {Promise<void>}
    */
-  downloadInventoryReport: async (params = {}) => {
-    const response = await api.get('/reports/download/inventory', { 
+  downloadInventoryReport: async (params = {}, format = 'csv') => {
+    const response = await api.get(`/reports/download/inventory?format=${format}`, { 
       params, 
       responseType: 'blob' 
     });
     const contentDisposition = response.headers['content-disposition'];
-    let filename = 'inventory-report.csv';
+    let filename = `inventory-report.${format}`;
     if (contentDisposition) {
         const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
         const matches = filenameRegex.exec(contentDisposition);
@@ -109,17 +111,18 @@ export const reportsAPI = {
   },
 
   /**
-   * Downloads a customer report as a CSV file.
+   * Downloads a customer report as a CSV or PDF file.
    * @param {object} params - The query parameters for the report.
+   * @param {string} format - The format of the report (csv or pdf).
    * @returns {Promise<void>}
    */
-  downloadCustomerReport: async (params = {}) => {
-    const response = await api.get('/reports/download/customers', { 
+  downloadCustomerReport: async (params = {}, format = 'csv') => {
+    const response = await api.get(`/reports/download/customers?format=${format}`, { 
       params, 
       responseType: 'blob' 
     });
     const contentDisposition = response.headers['content-disposition'];
-    let filename = 'customer-report.csv';
+    let filename = `customer-report.${format}`;
     if (contentDisposition) {
         const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
         const matches = filenameRegex.exec(contentDisposition);

@@ -83,5 +83,14 @@ export const productsAPI = {
   getActiveProducts: async () => {
     const response = await api.get('/products/active');
     return response.data;
-  }
+  },
+
+  uploadCSV: async (formData) => {
+    const response = await api.post('/products/upload/csv', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
 }; 

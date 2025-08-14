@@ -81,6 +81,12 @@ module.exports = (sequelize) => {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    image_url: {
+      type: DataTypes.STRING(255),
+    },
+    back_image_url: {
+      type: DataTypes.STRING(255),
+    },
   }, {
     sequelize,
     modelName: 'Product',

@@ -186,6 +186,10 @@ const Login = () => {
     } catch (err) {
       console.error('Login.jsx: Error during login API call:', err.response?.data || err.message);
       setError(err.response?.data?.message || 'An error occurred during login');
+      // Add a more descriptive error for network issues
+      if (!err.response) {
+        setError('Network error. Could not connect to the server.');
+      }
     }
   };
 

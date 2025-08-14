@@ -16,28 +16,17 @@ export const goldRateAPI = {
         throw new Error('Invalid response format from gold rates API');
       }
 
-      // Validate and normalize rates
-      const validPurities = ['24K', '22K', '18K'];
-      const normalizedRates = {};
+      // Extract all relevant data from the response
+      const { rates, liveApiRates, manualDbRates, source, timestamp } = response.data;
 
-      validPurities.forEach(purity => {
-        const rateData = response.data.rates[purity];
-        if (!rateData) return;
-
-        normalizedRates[purity] = {
-          purity,
-          rate: typeof rateData.rate === 'string' ? 
-              parseFloat(rateData.rate) : rateData.rate,
-          source: rateData.source || 'unknown',
-          timestamp: rateData.timestamp || new Date().toISOString()
-        };
-      });
-
+      // No need for validPurities and normalization here, as backend handles it
       return {
         success: true,
-        rates: normalizedRates,
-        source: response.data.source,
-        timestamp: response.data.timestamp
+        rates: rates, // The final merged rates
+        liveApiRates: liveApiRates, // Rates directly from live API
+        manualDbRates: manualDbRates, // Rates directly from DB
+        source: source,
+        timestamp: timestamp
       };
     } catch (error) {
       console.error('Gold rates fetch error:', error);
@@ -83,6 +72,24 @@ export const goldRateAPI = {
     } catch (error) {
       console.error('Gold rates update error:', error);
       throw new Error(error.response?.data?.message || 'Failed to update gold rates');
+    }
+  },
+
+  /**
+   * Resets all manual gold rate overrides, reverting to live API only. (Admin only)
+   * @returns {Promise<object>} Success message.
+   * @throws {Error} If the API request fails
+   */
+  resetGoldRates: async () => {
+    try {
+      const response = await api.delete('/gold-rates/reset');
+      if (!response.data || !response.data.success) {
+        throw new Error('Failed to reset gold rates');
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Gold rates reset error:', error);
+      throw new Error(error.response?.data?.message || 'Failed to reset gold rates');
     }
   },
 };

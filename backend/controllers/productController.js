@@ -1,14 +1,21 @@
 const { Op } = require("sequelize");
 const { Product } = require('../models');
+const { sequelize } = require('../config/database');
+const fs = require('fs');
+const csv = require('csv-parser');
 
 // Create product
 exports.createProduct = async (req, res) => {
   try {
     const productData = req.body;
+    // Removed tags handling as the column is removed from the model
+
     // If a file was uploaded, add its path to the data
-    if (req.file) {
-      // The path will depend on your server setup, e.g., '/uploads/filename.jpg'
-      productData.image_url = `/uploads/${req.file.filename}`;
+    if (req.files && req.files.image && req.files.image[0]) {
+      productData.image_url = `/uploads/${req.files.image[0].filename}`;
+    }
+    if (req.files && req.files.back_image && req.files.back_image[0]) {
+      productData.back_image_url = `/uploads/${req.files.back_image[0].filename}`;
     }
     const product = await Product.create(productData);
     res.status(201).json({ success: true, product });
@@ -20,15 +27,31 @@ exports.createProduct = async (req, res) => {
 // Get all products
 exports.getProducts = async (req, res) => {
   try {
-    const { category, purity, search } = req.query;
+    const { category, purity, search, minPrice, maxPrice } = req.query; // Removed tags from destructuring
     let query = {};
 
     if (category) query.category = category;
-    if (purity) query.purity = purity;
+    if (purity && purity !== '') query.purity = purity;
+
+    if (minPrice && maxPrice) {
+      query.selling_price = { [Op.between]: [minPrice, maxPrice] };
+    } else if (minPrice) {
+      query.selling_price = { [Op.gte]: minPrice };
+    } else if (maxPrice) {
+      query.selling_price = { [Op.lte]: maxPrice };
+    }
+
+    // Removed tags filtering logic
+
     if (search) {
+      const searchTerm = search.toLowerCase();
       query[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-        { barcode: { [Op.iLike]: `%${search}%` } }
+        sequelize.where(sequelize.fn('lower', sequelize.col('name')), {
+          [Op.like]: `%${searchTerm}%`
+        }),
+        sequelize.where(sequelize.fn('lower', sequelize.col('barcode')), {
+          [Op.like]: `%${searchTerm}%`
+        }),
       ];
     }
 
@@ -38,9 +61,11 @@ exports.getProducts = async (req, res) => {
       products
     });
   } catch (err) {
+    console.error('Error in getProducts:', err);
     res.status(500).json({
       success: false,
-      message: err.message
+      message: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
     });
   }
 };
@@ -50,6 +75,31 @@ exports.getProductByBarcode = async (req, res) => {
   try {
     const { barcode } = req.params;
     const product = await Product.findOne({ where: { barcode } });
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      product
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+};
+
+// Get product by SKU
+exports.getProductBySku = async (req, res) => {
+  try {
+    const { sku } = req.params;
+    const product = await Product.findOne({ where: { sku } });
 
     if (!product) {
       return res.status(404).json({
@@ -99,7 +149,19 @@ exports.getProductById = async (req, res) => {
 exports.updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const [updatedRows] = await Product.update(req.body, { where: { id } });
+    const productData = req.body; // Get product data from body
+
+    // Removed tags handling as the column is removed from the model
+
+    // Handle image uploads
+    if (req.files && req.files.image && req.files.image[0]) {
+      productData.image_url = `/uploads/${req.files.image[0].filename}`;
+    }
+    if (req.files && req.files.back_image && req.files.back_image[0]) {
+      productData.back_image_url = `/uploads/${req.files.back_image[0].filename}`;
+    }
+
+    const [updatedRows] = await Product.update(productData, { where: { id } }); // Use productData
     if (updatedRows === 0) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
@@ -186,4 +248,80 @@ exports.getLowStockProducts = async (req, res) => {
       message: err.message
     });
   }
+};
+
+exports.searchProducts = async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q) {
+      return res.status(400).json({ success: false, message: 'Search query is required' });
+    }
+
+    const searchTerm = q.toString().trim().toLowerCase();
+    const products = await Product.findAll({
+      where: {
+        [Op.or]: [
+          sequelize.where(sequelize.fn('lower', sequelize.col('name')), {
+            [Op.like]: `%${searchTerm}%`
+          }),
+          sequelize.where(sequelize.fn('lower', sequelize.col('barcode')), {
+            [Op.like]: `%${searchTerm}%`
+          }),
+          sequelize.where(sequelize.fn('lower', sequelize.col('sku')), {
+            [Op.like]: `%${searchTerm}%`
+          }),
+        ],
+      },
+      limit: 10,
+    });
+
+    res.json({ success: true, products });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.uploadCSV = async (req, res) => {
+  if (!req.file) {
+    return res.status(400).send('No file uploaded.');
+  }
+
+  const results = [];
+  const filePath = req.file.path;
+
+  fs.createReadStream(filePath)
+    .pipe(csv())
+    .on('data', (data) => results.push(data))
+    .on('end', async () => {
+      let createdCount = 0;
+      let updatedCount = 0;
+
+      for (const item of results) {
+        const { sku, ...productData } = item;
+
+        try {
+          const [product, created] = await Product.findOrCreate({
+            where: { sku },
+            defaults: productData,
+          });
+
+          if (created) {
+            createdCount++;
+          } else {
+            await product.update(productData);
+            updatedCount++;
+          }
+        } catch (error) {
+          console.error(`Error processing SKU ${sku}:`, error);
+        }
+      }
+
+      fs.unlinkSync(filePath); // Clean up the uploaded file
+      res.status(200).json({ 
+        success: true, 
+        message: 'CSV processed successfully.',
+        created: createdCount,
+        updated: updatedCount,
+      });
+    });
 };

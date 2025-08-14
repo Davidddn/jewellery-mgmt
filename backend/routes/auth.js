@@ -2,13 +2,13 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
-const auth = require('../middleware/auth'); // Middleware for authentication
+const { protect } = require('../middleware/auth');
 
 // Use controller methods for all authentication routes
 router.post('/register', authController.register);
 router.post('/login', authController.login);
-router.get('/verify', auth, authController.verifyToken); // Requires authentication
-router.get('/profile', auth, authController.getProfile); // Requires authentication
-router.put('/profile', auth, authController.updateProfile); // Requires authentication
+router.get('/verify', protect, authController.verifyToken); // Requires authentication
+router.get('/profile', protect, authController.getProfile); // Requires authentication
+router.put('/profile', protect, authController.updateProfile); // Requires authentication
 
 module.exports = router;
