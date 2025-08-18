@@ -1,40 +1,24 @@
-const { DataTypes } = require('sequelize');
-
-module.exports = (sequelize) => {
+module.exports = (sequelize, DataTypes) => {
   const GoldRate = sequelize.define('GoldRate', {
-    id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true
-    },
-    purity: {
-      type: DataTypes.STRING(4),
-      allowNull: false,
-      unique: true,
-      validate: {
-        isIn: [['24K', '22K', '18K']]
-      }
-    },
-    rate: {
+    rate_22k: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
-      defaultValue: 0.00,
-      validate: {
-        min: 0
-      }
     },
-    last_updated_by: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      references: {
-        model: 'users',
-        key: 'id'
-      }
-    }
+    rate_18k: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+    },
+    rate_24k: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+    },
+    date: {
+      type: DataTypes.DATEONLY,
+      defaultValue: DataTypes.NOW,
+      allowNull: false,
+    },
   }, {
-    tableName: 'gold_rates',
     timestamps: true,
-    underscored: true
   });
 
   return GoldRate;

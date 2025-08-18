@@ -79,6 +79,7 @@ const UpdateRatesDialog = ({ open, onClose, rates }) => {
                         onChange={(e) => setPurity(e.target.value)}
                     >
                         <MenuItem value="24K">24K</MenuItem>
+                        <MenuItem value="24K">24K</MenuItem>
                         <MenuItem value="22K">22K</MenuItem>
                         <MenuItem value="18K">18K</MenuItem>
                     </Select>
@@ -186,10 +187,10 @@ const GoldRateCard = ({ goldData, isLoading, error }) => {
     const [comparisonDialogOpen, setComparisonDialogOpen] = useState(false);
     
     const rates = goldData?.rates; // Extract rates from goldData
-    const source = goldData?.source; // Extract source from goldData
+   // const source = goldData?.source; // Extract source from goldData
 
-    const liveRates = source === 'live-api' ? rates : null;
-    const manualRates = (source === 'manual' || source === 'manual-fallback') ? rates : null;
+   // const liveRates = source === 'live-api' ? rates : null;
+   // const manualRates = (source === 'manual' || source === 'manual-fallback') ? rates : null;
 
     const resetRatesMutation = useMutation({
         mutationFn: goldRateAPI.resetGoldRates,
@@ -337,7 +338,7 @@ const Dashboard = () => {
 
   const { data: goldData, isLoading: isGoldLoading, error: goldError } = useQuery({
     queryKey: ['goldRate'],
-    queryFn: goldRateAPI.getGoldRates,
+    queryFn: goldRateAPI.getLatestGoldRate,
   });
 
   // Fetch hallmarking data

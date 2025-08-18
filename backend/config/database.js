@@ -4,6 +4,8 @@ const logger = require('../utils/logger');
 
 const dbPath = path.resolve(__dirname, '..', process.env.SQLITE_DB_PATH || './data/jewellery_mgmt.db');
 
+console.log('Database path being used:', dbPath);
+
 const sequelize = new Sequelize({
   dialect: 'sqlite',
   storage: dbPath,
@@ -29,6 +31,19 @@ const testSqliteConnection = async () => {
 };
 
 /**
+ * Synchronizes all defined models with the database.
+ * This will create tables if they don't exist, and alter them if they do (e.g., add new columns).
+ */
+const syncDatabase = async () => {
+  try {
+    await sequelize.sync({ alter: true });
+    logger.info('Database synchronized successfully.');
+  } catch (error) {
+    logger.error('Error synchronizing database:', error);
+  }
+};
+
+/**
  * Closes all database connections.
  * This is important for graceful shutdown.
  */
@@ -44,5 +59,6 @@ const closeConnections = async () => {
 module.exports = {
   sequelize,
   testSqliteConnection,
+  syncDatabase,
   closeConnections
 };

@@ -19,7 +19,7 @@ import {
   Select, MenuItem, InputLabel,
   FormControl,
 } from '@mui/material';
-import { Download } from '@mui/icons-material';
+import { Download, TableChart } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { reportsAPI } from '../api/reports';
 import DownloadModal from '../components/DownloadModal'; // Import DownloadModal
@@ -36,6 +36,7 @@ import {
   Bar,
   Label,
 } from 'recharts';
+import { productsAPI } from '../api/products'; // Import productsAPI
 
 // Helper to format currency
 const formatCurrency = (value) => `₹${Number(value).toLocaleString('en-IN')}`;
@@ -65,6 +66,7 @@ const Reports = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [downloadError, setDownloadError] = useState(null);
   const [downloadFormat, setDownloadFormat] = useState('csv');
+  const [exportingExcel, setExportingExcel] = useState(false); // State for Excel exporting
 
   // State for filters
   const [salesFilters, setSalesFilters] = useState({ type: 'all', start_date: '', end_date: '', name: '' });
@@ -156,6 +158,20 @@ const Reports = () => {
         default: return "Download Report";
     }
   }
+
+  // Add similar Excel export functionality to the Reports page
+  const handleProductsExcelExport = async () => {
+    try {
+      setExportingExcel(true);
+      await productsAPI.exportExcel();
+      console.log('Products Excel export completed');
+    } catch (error) {
+      console.error('Excel export failed:', error);
+      alert('Failed to export Excel file. Please make sure you are logged in.');
+    } finally {
+      setExportingExcel(false);
+    }
+  };
 
   return (
     <Box>
@@ -331,6 +347,17 @@ const Reports = () => {
         options={getDownloadOptions()}
         title={getModalTitle()}
       />
+
+      {/* Add button for Excel export */}
+      <Button
+        variant="contained"
+        startIcon={<TableChart />}
+        onClick={handleProductsExcelExport}
+        disabled={exportingExcel}
+        sx={{ mb: 2 }}
+      >
+        {exportingExcel ? 'Exporting...' : 'Export Products to Excel'}
+      </Button>
     </Box>
   );
 };

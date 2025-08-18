@@ -1,376 +1,967 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Typography, Box, TextField, Button, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, CircularProgress, Alert, IconButton, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Grid, FormControlLabel, Switch, Avatar, Select, MenuItem, InputLabel, FormControl
+  Box,
+  Typography,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Grid,
+  Card,
+  CardContent,
+  CardMedia,
+  IconButton,
+  Chip,
+  Alert,
+  CircularProgress,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Pagination,
+  InputAdornment,
+  Avatar,
+  Autocomplete,
+  Stack
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon, Upload as UploadIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Search as SearchIcon,
+  Image as ImageIcon,
+  PhotoCamera as PhotoCameraIcon,
+  Close as CloseIcon,
+  Download,
+  GetApp,
+  TableChart
+} from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useForm, Controller } from 'react-hook-form';
 import { productsAPI } from '../api/products';
-import { useAuth } from '../contexts/useAuth';
 
 const Products = () => {
-  const { user } = useAuth();
   const queryClient = useQueryClient();
-
-  const [searchTerm, setSearchTerm] = useState('');
-  const [purityFilter, setPurityFilter] = useState('');
-  const [errorAlert, setErrorAlert] = useState('');
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState(null);
-  const [selectedFile, setSelectedFile] = useState(null);
-
-  // Dialog states
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  
+  const [open, setOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [deletingProductId, setDeletingProductId] = useState(null);
-  
-  // State for image handling
-  const [frontImageFile, setFrontImageFile] = useState(null);
-  const [backImageFile, setBackImageFile] = useState(null);
-  const [frontImagePreview, setFrontImagePreview] = useState('');
+  const [page, setPage] = useState(1);
+  const [selectedTags, setSelectedTags] = useState([]); // ADD THIS
+  const [availableTags, setAvailableTags] = useState([]); // ADD THIS
+  const [filters, setFilters] = useState({
+    search: '',
+    category: '',
+    purity: '',
+    minPrice: '',
+    maxPrice: '',
+    tags: '' // ADD THIS
+  });
+
+  // Image states
+  const [mainImage, setMainImage] = useState(null);
+  const [backImage, setBackImage] = useState(null);
+  const [mainImagePreview, setMainImagePreview] = useState('');
   const [backImagePreview, setBackImagePreview] = useState('');
 
-  // Define user permissions
-  const canAdd = user.role === 'admin' || user.role === 'manager';
-  const canEdit = user.role === 'admin' || user.role === 'manager' || user.role === 'inventory';
-  const canDelete = user.role === 'admin';
-
-  // Fetching data with filters
-  const { data, isLoading, error: queryError } = useQuery({
-    queryKey: ['products', { searchTerm, purity: purityFilter }],
-    queryFn: () => productsAPI.getProducts({ search: searchTerm, purity: purityFilter }),
+  const { control, handleSubmit, reset, formState: { errors } } = useForm({
+    defaultValues: {
+      name: '',
+      description: '',
+      category: '',
+      subcategory: '',
+      sku: '',
+      barcode: '',
+      weight: '',
+      purity: '',
+      metal_type: '',
+      stone_type: '',
+      stone_weight: '',
+      cost_price: '',
+      selling_price: '',
+      discount_percentage: 0,
+      stock_quantity: 0,
+      reorder_level: 10,
+      supplier: '',
+      is_active: true,
+      tags: []
+    }
   });
 
-  // Mutations
-  const createMutation = useMutation({
-    mutationFn: productsAPI.createProduct,
-    onSuccess: () => {
-      queryClient.invalidateQueries(['products']);
-      setAddDialogOpen(false);
-    },
-    onError: (err) => setErrorAlert(err.response?.data?.message || 'Failed to create product.'),
+  // Fetch products
+  const { data: productsData, isLoading, error } = useQuery({
+    queryKey: ['products', page, filters],
+    queryFn: () => productsAPI.getProducts({ page, limit: 12, ...filters }),
+    keepPreviousData: true
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, productData }) => productsAPI.updateProduct(id, productData),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['products']);
-      setEditDialogOpen(false);
-    },
-    onError: (err) => setErrorAlert(err.response?.data?.message || 'Failed to update product.'),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id) => productsAPI.deleteProduct(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['products']);
-      setDeleteDialogOpen(false);
-    },
-    onError: (err) => {
-      setErrorAlert(err.response?.data?.message || 'Failed to delete product.');
-      setDeleteDialogOpen(false);
-    },
-  });
-
-  const handleSearchChange = (event) => setSearchTerm(event.target.value);
-  const handleFilterChange = (event) => setPurityFilter(event.target.value);
-
-  const handleImageChange = (event, type) => {
-    const file = event.target.files[0];
-    if (file) {
-      if (type === 'front') {
-        setFrontImageFile(file);
-        setFrontImagePreview(URL.createObjectURL(file));
-      } else {
-        setBackImageFile(file);
-        setBackImagePreview(URL.createObjectURL(file));
+  // Fetch available tags
+  useEffect(() => {
+    const fetchTags = async () => {
+      try {
+        const response = await productsAPI.getAllTags();
+        if (response.success) {
+          setAvailableTags(response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching tags:', error);
       }
+    };
+
+    fetchTags();
+  }, []); // Run once on component mount
+
+  // Create/Update product mutation
+  const productMutation = useMutation({
+    mutationFn: (data) => {
+      if (editingProduct) {
+        return productsAPI.updateProduct(editingProduct.id, data);
+      } else {
+        return productsAPI.createProduct(data);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['products']);
+      handleClose();
+    }
+  });
+
+  // Delete product mutation
+  const deleteMutation = useMutation({
+    mutationFn: productsAPI.deleteProduct,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['products']);
+    }
+  });
+
+  const handleOpen = (product = null) => {
+    setEditingProduct(product);
+    if (product) {
+      reset(product);
+      setMainImagePreview(product.image_url ? `http://localhost:5000${product.image_url}` : '');
+      setBackImagePreview(product.back_image_url ? `http://localhost:5000${product.back_image_url}` : '');
+    } else {
+      reset();
+      setMainImagePreview('');
+      setBackImagePreview('');
+    }
+    setMainImage(null);
+    setBackImage(null);
+    setOpen(true);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    setEditingProduct(null);
+    setMainImage(null);
+    setBackImage(null);
+    setMainImagePreview('');
+    setBackImagePreview('');
+    reset();
+  };
+
+  const handleMainImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setMainImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setMainImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
-  const handleFormSubmit = (event, mutation, closeDialog, isEdit = false) => {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const formData = new FormData(formElement);
-    
-    formData.set('is_active', formElement.is_active.checked);
-    if (frontImageFile) formData.append('image', frontImageFile); // Maps to 'image_url' on backend
-    if (backImageFile) formData.append('back_image', backImageFile); // Requires backend support
-    
-    if (isEdit) {
-      mutation.mutate({ id: editingProduct.id, productData: formData });
-    } else {
-      mutation.mutate(formData);
+  const handleBackImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setBackImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setBackImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
     }
-    closeDialog();
   };
-  
-  const resetImageState = () => {
-    setFrontImageFile(null);
-    setBackImageFile(null);
-    setFrontImagePreview('');
+
+  const removeMainImage = () => {
+    setMainImage(null);
+    setMainImagePreview('');
+  };
+
+  const removeBackImage = () => {
+    setBackImage(null);
     setBackImagePreview('');
   };
 
-  // Dialog handlers
-  const handleOpenAddDialog = () => {
-    resetImageState();
-    setAddDialogOpen(true);
-  };
-  const handleCloseAddDialog = () => setAddDialogOpen(false);
-  
-  const handleOpenEditDialog = (product) => {
-    resetImageState();
-    setEditingProduct(product);
-    setFrontImagePreview(product.image_url || '');
-    setBackImagePreview(product.back_image_url || ''); // Assuming a back_image_url field
-    setEditDialogOpen(true);
-  };
-  const handleCloseEditDialog = () => {
-    setEditDialogOpen(false);
-    setEditingProduct(null);
-  };
-
-  const handleOpenDeleteDialog = (id) => setDeletingProductId(id);
-  const handleCloseDeleteDialog = () => setDeleteDialogOpen(false);
-  const handleDeleteConfirm = () => deleteMutation.mutate(deletingProductId);
-
-  const handleFileChange = (event) => {
-    setSelectedFile(event.target.files[0]);
-  };
-
-  const handleUpload = async () => {
-    if (!selectedFile) {
-      setErrorAlert('Please select a file to upload.');
-      return;
-    }
-
-    setUploading(true);
+  const onSubmit = (data) => {
     const formData = new FormData();
-    formData.append('csv', selectedFile);
+    
+    // Append all form data
+    Object.keys(data).forEach(key => {
+      if (data[key] !== null && data[key] !== undefined) {
+        formData.append(key, data[key]);
+      }
+    });
+    
+    // Append images
+    if (mainImage) {
+      formData.append('image', mainImage);
+    }
+    if (backImage) {
+      formData.append('back_image', backImage);
+    }
+    
+    productMutation.mutate(formData);
+  };
 
-    try {
-      const result = await productsAPI.uploadCSV(formData);
-      setUploadResult(result);
-      queryClient.invalidateQueries(['products']);
-    } catch (error) {
-      setErrorAlert(error.response?.data?.message || 'Failed to upload CSV.');
-    } finally {
-      setUploading(false);
-      setUploadDialogOpen(false);
+  const handleDelete = (id) => {
+    if (window.confirm('Are you sure you want to delete this product?')) {
+      deleteMutation.mutate(id);
     }
   };
 
-  const products = data?.products || [];
+  const handleFilterChange = (key, value) => {
+    if (key === 'tags') {
+      setSelectedTags(value);
+      setFilters(prev => ({ ...prev, [key]: value.join(',') }));
+    } else {
+      setFilters(prev => ({ ...prev, [key]: value }));
+    }
+    setPage(1);
+  };
 
-  // This form now reflects the fields in your seed-data.sql and Product.js model
-  const renderProductForm = (product = {}) => (
-    <Grid container spacing={2} sx={{ mt: 1 }}>
-      <Grid item xs={12} sm={6}><TextField name="name" label="Product Name" fullWidth required defaultValue={product.name} /></Grid>
-      <Grid item xs={12} sm={6}><TextField name="sku" label="SKU" fullWidth required defaultValue={product.sku} /></Grid>
-      <Grid item xs={12} sm={6}><TextField name="category" label="Category" fullWidth defaultValue={product.category} /></Grid>
-      <Grid item xs={12} sm={6}><TextField name="subcategory" label="Subcategory" fullWidth defaultValue={product.subcategory} /></Grid>
-      <Grid item xs={12} sm={6}><TextField name="barcode" label="Barcode" fullWidth defaultValue={product.barcode} /></Grid>
-      <Grid item xs={12} sm={6}>
-        <FormControl fullWidth>
-          <InputLabel>Metal Type</InputLabel>
-          <Select
-            name="metal_type"
-            label="Metal Type"
-            defaultValue={product.metal_type || ''}
-            required
-          >
-            <MenuItem value=""><em>None</em></MenuItem>
-            <MenuItem value="Gold">Gold</MenuItem>
-            <MenuItem value="Silver">Silver</MenuItem>
-            <MenuItem value="Platinum">Platinum</MenuItem>
-            <MenuItem value="Diamond">Diamond</MenuItem>
-            <MenuItem value="Other">Other</MenuItem>
-          </Select>
-        </FormControl>
-      </Grid>
-      <Grid item xs={12} sm={6}>
-        <FormControl fullWidth>
-          <InputLabel>Purity</InputLabel>
-          <Select
-            name="purity"
-            label="Purity"
-            defaultValue={product.purity || ''}
-          >
-            <MenuItem value=""><em>None</em></MenuItem>
-            <MenuItem value="24K">24K</MenuItem>
-            <MenuItem value="22K">22K</MenuItem>
-            <MenuItem value="18K">18K</MenuItem>
-            <MenuItem value="14K">14K</MenuItem>
-            <MenuItem value="10K">10K</MenuItem>
-            <MenuItem value="925">925 (Silver)</MenuItem>
-            <MenuItem value="PT950">PT950 (Platinum)</MenuItem>
-          </Select>
-        </FormControl>
-      </Grid>
-      <Grid item xs={12} sm={6}><TextField name="weight" label="Weight (grams)" type="number" fullWidth defaultValue={product.weight} /></Grid>
-      <Grid item xs={12} sm={6}><TextField name="stone_type" label="Stone Type" fullWidth defaultValue={product.stone_type} /></Grid>
-      <Grid item xs={12} sm={6}><TextField name="stone_weight" label="Stone Weight (carats)" type="number" fullWidth defaultValue={product.stone_weight} /></Grid>
-      <Grid item xs={12} sm={6}><TextField name="cost_price" label="Cost Price" type="number" fullWidth required defaultValue={product.cost_price} /></Grid>
-      <Grid item xs={12} sm={6}><TextField name="selling_price" label="Selling Price" type="number" fullWidth required defaultValue={product.selling_price} /></Grid>
-      <Grid item xs={12} sm={6}><TextField name="stock_quantity" label="Stock Quantity" type="number" fullWidth required defaultValue={product.stock_quantity} /></Grid>
-      <Grid item xs={12} sm={6}><TextField name="reorder_level" label="Reorder Level" type="number" fullWidth defaultValue={product.reorder_level} /></Grid>
-      <Grid item xs={12}><TextField name="supplier" label="Supplier" fullWidth defaultValue={product.supplier} /></Grid>
-      <Grid item xs={12}><TextField name="description" label="Description" multiline rows={3} fullWidth defaultValue={product.description} /></Grid>
-      
-      {/* Dual Image Uploaders */}
-      <Grid item xs={12} sm={6}>
-        <Typography variant="subtitle1" gutterBottom>Product Image</Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Avatar src={frontImagePreview} sx={{ width: 80, height: 80 }} variant="rounded" />
-          <Button variant="outlined" component="label" startIcon={<UploadIcon />}> Upload <input type="file" hidden accept="image/*" onChange={(e) => handleImageChange(e, 'front')} /> </Button>
-        </Box>
-      </Grid>
-      <Grid item xs={12} sm={6}>
-        <Typography variant="subtitle1" gutterBottom>Background Image</Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Avatar src={backImagePreview} sx={{ width: 80, height: 80 }} variant="rounded" />
-          <Button variant="outlined" component="label" startIcon={<UploadIcon />}> Upload <input type="file" hidden accept="image/*" onChange={(e) => handleImageChange(e, 'back')} /> </Button>
-        </Box>
-      </Grid>
-      
-      <Grid item xs={12}>
-        <FormControlLabel control={<Switch name="is_active" defaultChecked={product.is_active !== false} />} label="Product Active" />
-      </Grid>
-    </Grid>
-  );
+  const clearFilters = () => {
+    setFilters({
+      search: '',
+      category: '',
+      purity: '',
+      minPrice: '',
+      maxPrice: '',
+      tags: ''
+    });
+    setSelectedTags([]);
+    setPage(1);
+  };
+
+  // Add this state for loading
+  const [exportingExcel, setExportingExcel] = useState(false);
+
+  // Add this function
+  const handleExcelExport = async () => {
+    try {
+      setExportingExcel(true);
+      await productsAPI.exportExcel();
+      // Optional: Show success message
+      console.log('Excel export completed');
+    } catch (error) {
+      console.error('Excel export failed:', error);
+      // Show error message to user
+      alert('Failed to export Excel file. Please make sure you are logged in.');
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
+  if (isLoading) return <CircularProgress />;
+  if (error) return <Alert severity="error">Error loading products</Alert>;
 
   return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h4" gutterBottom>Products</Typography>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>Filter by Purity</InputLabel>
-            <Select value={purityFilter} label="Filter by Purity" onChange={handleFilterChange}>
-              <MenuItem value=""><em>All</em></MenuItem>
-              <MenuItem value="18K">18K</MenuItem>
-              <MenuItem value="14K">14K</MenuItem>
-              <MenuItem value="22K">22K</MenuItem>
-              <MenuItem value="925">925 Silver</MenuItem>
-              <MenuItem value="950">950 Platinum</MenuItem>
-            </Select>
-          </FormControl>
-          <TextField label="Search Products" variant="outlined" size="small" value={searchTerm} onChange={handleSearchChange} />
-          {canAdd && <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenAddDialog}>Add Product</Button>}
-          {canAdd && <Button variant="contained" startIcon={<UploadIcon />} onClick={() => setUploadDialogOpen(true)}>Upload CSV</Button>}
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4">Products</Typography>
+        <Box>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpen()}
+            sx={{ mr: 1 }}
+          >
+            Add Product
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<TableChart />}
+            onClick={handleExcelExport}
+            disabled={exportingExcel}
+            sx={{ mr: 1 }}
+          >
+            {exportingExcel ? 'Exporting...' : 'Export Excel'}
+          </Button>
         </Box>
       </Box>
 
-      {errorAlert && <Alert severity="error" onClose={() => setErrorAlert('')} sx={{ mb: 2 }}>{errorAlert}</Alert>}
-      {isLoading && <CircularProgress />}
-      {queryError && !isLoading && <Alert severity="error">Failed to fetch products: {queryError.message}</Alert>}
-      
-      {!isLoading && !queryError && (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>SKU</TableCell>
-                <TableCell>Barcode</TableCell>
-                <TableCell>Category</TableCell>
-                <TableCell>Metal Type</TableCell>
-                <TableCell>Purity</TableCell>
-                <TableCell align="right">Selling Price (₹)</TableCell>
-                <TableCell align="right">Stock</TableCell>
-                {(canEdit || canDelete) && <TableCell align="center">Actions</TableCell>}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {products.map((product) => (
-                <TableRow key={product.id}>
-                  <TableCell>{product.name}</TableCell>
-                  <TableCell>{product.sku}</TableCell>
-                  <TableCell>{product.barcode}</TableCell>
-                  <TableCell>{product.category}</TableCell>
-                  <TableCell>{product.metal_type}</TableCell>
-                  <TableCell>{product.purity}</TableCell>
-                  <TableCell align="right">{parseFloat(product.selling_price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                  <TableCell align="right">{product.stock_quantity}</TableCell>
-                  {(canEdit || canDelete) && (
-                    <TableCell align="center">
-                      {canEdit && <IconButton onClick={() => handleOpenEditDialog(product)} color="primary"><EditIcon /></IconButton>}
-                      {canDelete && <IconButton onClick={() => handleOpenDeleteDialog(product.id)} color="error"><DeleteIcon /></IconButton>}
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
+      {/* Filters */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} sm={6} md={3}>
+              <TextField
+                fullWidth
+                placeholder="Search products..."
+                value={filters.search}
+                onChange={(e) => handleFilterChange('search', e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={2}>
+              <FormControl fullWidth>
+                <InputLabel>Category</InputLabel>
+                <Select
+                  value={filters.category}
+                  label="Category"
+                  onChange={(e) => handleFilterChange('category', e.target.value)}
+                >
+                  <MenuItem value="">All Categories</MenuItem>
+                  <MenuItem value="Rings">Rings</MenuItem>
+                  <MenuItem value="Necklaces">Necklaces</MenuItem>
+                  <MenuItem value="Earrings">Earrings</MenuItem>
+                  <MenuItem value="Bracelets">Bracelets</MenuItem>
+                  <MenuItem value="Pendants">Pendants</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6} md={2}>
+              <FormControl fullWidth>
+                <InputLabel>Purity</InputLabel>
+                <Select
+                  value={filters.purity}
+                  label="Purity"
+                  onChange={(e) => handleFilterChange('purity', e.target.value)}
+                >
+                  <MenuItem value="">All Purities</MenuItem>
+                  <MenuItem value="24K">24K</MenuItem>
+                  <MenuItem value="22K">22K</MenuItem>
+                  <MenuItem value="18K">18K</MenuItem>
+                  <MenuItem value="14K">14K</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6} md={2}>
+              <TextField
+                fullWidth
+                label="Min Price"
+                type="number"
+                value={filters.minPrice}
+                onChange={(e) => handleFilterChange('minPrice', e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={2}>
+              <TextField
+                fullWidth
+                label="Max Price"
+                type="number"
+                value={filters.maxPrice}
+                onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <Autocomplete
+                multiple
+                options={availableTags}
+                value={selectedTags}
+                onChange={(event, newValue) => handleFilterChange('tags', newValue)}
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => (
+                    <Chip variant="outlined" label={option} {...getTagProps({ index })} key={index} />
+                  ))
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Filter by Tags"
+                    placeholder="Select tags..."
+                  />
+                )}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={1}>
+              <Button variant="outlined" onClick={clearFilters} size="small">
+                Clear
+              </Button>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
 
-      {/* Add/Edit Product Dialogs */}
-      <Dialog open={addDialogOpen || editDialogOpen} onClose={editDialogOpen ? handleCloseEditDialog : handleCloseAddDialog} maxWidth="md" fullWidth>
-        <DialogTitle>{editDialogOpen ? 'Edit Product' : 'Add New Product'}</DialogTitle>
-        <Box component="form" onSubmit={(e) => handleFormSubmit(e, editDialogOpen ? updateMutation : createMutation, editDialogOpen ? handleCloseEditDialog : handleCloseAddDialog, editDialogOpen)}>
+      {/* Products Grid */}
+      <Grid container spacing={3}>
+        {productsData?.products?.map((product) => (
+          <Grid item xs={12} sm={6} md={4} lg={3} key={product.id}>
+            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <CardMedia
+                sx={{ 
+                  height: 200, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  bgcolor: 'grey.100'
+                }}
+              >
+                {product.image_url ? (
+                  <img
+                    src={`http://localhost:5000${product.image_url}`}
+                    alt={product.name}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover'
+                    }}
+                  />
+                ) : (
+                  <Avatar sx={{ width: 60, height: 60, bgcolor: 'grey.300' }}>
+                    <ImageIcon />
+                  </Avatar>
+                )}
+              </CardMedia>
+              
+              <CardContent sx={{ flexGrow: 1 }}>
+                <Typography gutterBottom variant="h6" component="div" noWrap>
+                  {product.name}
+                </Typography>
+                
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  SKU: {product.sku}
+                </Typography>
+                
+                <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                  {product.category && (
+                    <Chip label={product.category} size="small" />
+                  )}
+                  {product.purity && (
+                    <Chip label={product.purity} size="small" color="secondary" />
+                  )}
+                </Box>
+                
+                <Typography variant="body2" gutterBottom>
+                  Weight: {product.weight}g
+                </Typography>
+                
+                <Typography variant="h6" color="primary" gutterBottom>
+                  ₹{Number(product.selling_price).toLocaleString('en-IN')}
+                </Typography>
+                
+                <Typography variant="body2" color="text.secondary">
+                  Stock: {product.stock_quantity}
+                </Typography>
+
+                {/* Display Tags */}
+                {product.tags && product.tags.length > 0 && (
+                  <Box sx={{ mt: 1 }}>
+                    <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                      {product.tags.map((tag, index) => (
+                        <Chip
+                          key={index}
+                          label={tag}
+                          size="small"
+                          variant="outlined"
+                          sx={{ mb: 0.5 }}
+                        />
+                      ))}
+                    </Stack>
+                  </Box>
+                )}
+              </CardContent>
+              
+              <Box sx={{ p: 1, display: 'flex', justifyContent: 'space-between' }}>
+                <IconButton
+                  size="small"
+                  onClick={() => handleOpen(product)}
+                  color="primary"
+                >
+                  <EditIcon />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={() => handleDelete(product.id)}
+                  color="error"
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </Box>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+
+      {/* Pagination */}
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+        <Pagination
+          count={productsData?.totalPages || 1}
+          page={page}
+          onChange={(e, value) => setPage(value)}
+          color="primary"
+        />
+      </Box>
+
+      {/* Add/Edit Dialog */}
+      <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+        <DialogTitle>
+          {editingProduct ? 'Edit Product' : 'Add New Product'}
+        </DialogTitle>
+        
+        <form onSubmit={handleSubmit(onSubmit)}>
           <DialogContent>
-            {renderProductForm(editDialogOpen ? editingProduct : {})}
+            <Grid container spacing={2}>
+              {/* Image Upload Section */}
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom>
+                  Product Images
+                </Typography>
+                
+                <Grid container spacing={2}>
+                  {/* Main Image */}
+                  <Grid item xs={12} sm={6}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        Main Image
+                      </Typography>
+                      
+                      <Box
+                        sx={{
+                          width: '100%',
+                          height: 200,
+                          border: '2px dashed #ccc',
+                          borderRadius: 2,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          position: 'relative',
+                          mb: 1,
+                          overflow: 'hidden'
+                        }}
+                      >
+                        {mainImagePreview ? (
+                          <>
+                            <img
+                              src={mainImagePreview}
+                              alt="Main preview"
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover'
+                              }}
+                            />
+                            <IconButton
+                              sx={{
+                                position: 'absolute',
+                                top: 8,
+                                right: 8,
+                                bgcolor: 'rgba(255,255,255,0.8)'
+                              }}
+                              onClick={removeMainImage}
+                              size="small"
+                            >
+                              <CloseIcon />
+                            </IconButton>
+                          </>
+                        ) : (
+                          <PhotoCameraIcon sx={{ fontSize: 48, color: 'grey.400' }} />
+                        )}
+                      </Box>
+                      
+                      <Button
+                        variant="outlined"
+                        component="label"
+                        startIcon={<PhotoCameraIcon />}
+                        size="small"
+                      >
+                        Choose Main Image
+                        <input
+                          type="file"
+                          hidden
+                          accept="image/*"
+                          onChange={handleMainImageChange}
+                        />
+                      </Button>
+                    </Box>
+                  </Grid>
+                  
+                  {/* Back Image */}
+                  <Grid item xs={12} sm={6}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        Back Image
+                      </Typography>
+                      
+                      <Box
+                        sx={{
+                          width: '100%',
+                          height: 200,
+                          border: '2px dashed #ccc',
+                          borderRadius: 2,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          position: 'relative',
+                          mb: 1,
+                          overflow: 'hidden'
+                        }}
+                      >
+                        {backImagePreview ? (
+                          <>
+                            <img
+                              src={backImagePreview}
+                              alt="Back preview"
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover'
+                              }}
+                            />
+                            <IconButton
+                              sx={{
+                                position: 'absolute',
+                                top: 8,
+                                right: 8,
+                                bgcolor: 'rgba(255,255,255,0.8)'
+                              }}
+                              onClick={removeBackImage}
+                              size="small"
+                            >
+                              <CloseIcon />
+                            </IconButton>
+                          </>
+                        ) : (
+                          <PhotoCameraIcon sx={{ fontSize: 48, color: 'grey.400' }} />
+                        )}
+                      </Box>
+                      
+                      <Button
+                        variant="outlined"
+                        component="label"
+                        startIcon={<PhotoCameraIcon />}
+                        size="small"
+                      >
+                        Choose Back Image
+                        <input
+                          type="file"
+                          hidden
+                          accept="image/*"
+                          onChange={handleBackImageChange}
+                        />
+                      </Button>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Grid>
+
+              {/* Basic Information */}
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="name"
+                  control={control}
+                  rules={{ required: 'Product name is required' }}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Product Name"
+                      error={!!errors.name}
+                      helperText={errors.name?.message}
+                    />
+                  )}
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="sku"
+                  control={control}
+                  rules={{ required: 'SKU is required' }}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="SKU"
+                      error={!!errors.sku}
+                      helperText={errors.sku?.message}
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <Controller
+                  name="description"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Description"
+                      multiline
+                      rows={3}
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="category"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Category</InputLabel>
+                      <Select {...field} label="Category">
+                        <MenuItem value="Rings">Rings</MenuItem>
+                        <MenuItem value="Necklaces">Necklaces</MenuItem>
+                        <MenuItem value="Earrings">Earrings</MenuItem>
+                        <MenuItem value="Bracelets">Bracelets</MenuItem>
+                        <MenuItem value="Pendants">Pendants</MenuItem>
+                        <MenuItem value="Chains">Chains</MenuItem>
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="subcategory"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField {...field} fullWidth label="Subcategory" />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="purity"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Purity</InputLabel>
+                      <Select {...field} label="Purity">
+                        <MenuItem value="24K">24K</MenuItem>
+                        <MenuItem value="22K">22K</MenuItem>
+                        <MenuItem value="18K">18K</MenuItem>
+                        <MenuItem value="14K">14K</MenuItem>
+                        <MenuItem value="Silver">Silver</MenuItem>
+                        <MenuItem value="Platinum">Platinum</MenuItem>
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="metal_type"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth>
+                      <InputLabel>Metal Type</InputLabel>
+                      <Select {...field} label="Metal Type">
+                        <MenuItem value="Gold">Gold</MenuItem>
+                        <MenuItem value="Silver">Silver</MenuItem>
+                        <MenuItem value="Platinum">Platinum</MenuItem>
+                        <MenuItem value="White Gold">White Gold</MenuItem>
+                        <MenuItem value="Rose Gold">Rose Gold</MenuItem>
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="weight"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Weight (grams)"
+                      type="number"
+                      step="0.01"
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="stone_type"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField {...field} fullWidth label="Stone Type" />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="stone_weight"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Stone Weight (grams)"
+                      type="number"
+                      step="0.01"
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="cost_price"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Cost Price"
+                      type="number"
+                      step="0.01"
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="selling_price"
+                  control={control}
+                  rules={{ required: 'Selling price is required' }}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Selling Price"
+                      type="number"
+                      step="0.01"
+                      error={!!errors.selling_price}
+                      helperText={errors.selling_price?.message}
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="discount_percentage"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Discount %"
+                      type="number"
+                      step="0.01"
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="stock_quantity"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Stock Quantity"
+                      type="number"
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="reorder_level"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      fullWidth
+                      label="Reorder Level"
+                      type="number"
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="supplier"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField {...field} fullWidth label="Supplier" />
+                  )}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Controller
+                  name="barcode"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField {...field} fullWidth label="Barcode" />
+                  )}
+                />
+              </Grid>
+
+              {/* Tags Input */}
+              <Grid item xs={12}>
+                <Controller
+                  name="tags"
+                  control={control}
+                  render={({ field: { onChange, value } }) => (
+                    <Autocomplete
+                      multiple
+                      freeSolo
+                      options={availableTags}
+                      value={value || []}
+                      onChange={(event, newValue) => onChange(newValue)}
+                      renderTags={(value, getTagProps) =>
+                        value.map((option, index) => (
+                          <Chip variant="outlined" label={option} {...getTagProps({ index })} key={index} />
+                        ))
+                      }
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Tags"
+                          placeholder="Add tags (press Enter to add new tag)"
+                          helperText="Add tags to help with search and categorization"
+                        />
+                      )}
+                    />
+                  )}
+                />
+              </Grid>
+            </Grid>
           </DialogContent>
+          
           <DialogActions>
-            <Button onClick={editDialogOpen ? handleCloseEditDialog : handleCloseAddDialog}>Cancel</Button>
-            <Button type="submit" disabled={createMutation.isLoading || updateMutation.isLoading}>
-              {editDialogOpen ? (updateMutation.isLoading ? 'Saving...' : 'Save Changes') : (createMutation.isLoading ? 'Adding...' : 'Add Product')}
+            <Button onClick={handleClose}>Cancel</Button>
+            <Button 
+              type="submit" 
+              variant="contained"
+              disabled={productMutation.isLoading}
+            >
+              {productMutation.isLoading ? (
+                <CircularProgress size={24} />
+              ) : (
+                editingProduct ? 'Update Product' : 'Create Product'
+              )}
             </Button>
           </DialogActions>
-        </Box>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={handleCloseDeleteDialog}>
-        <DialogTitle>Delete Product?</DialogTitle>
-        <DialogContent><DialogContentText>Are you sure you want to delete this product? This action cannot be undone.</DialogContentText></DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
-          <Button onClick={handleDeleteConfirm} color="error" disabled={deleteMutation.isLoading}>
-            {deleteMutation.isLoading ? 'Deleting...' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Upload CSV Dialog */}
-      <Dialog open={uploadDialogOpen} onClose={() => setUploadDialogOpen(false)}>
-        <DialogTitle>Upload CSV</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Select a CSV file to upload. The CSV should have a header row with column names matching the product fields.
-          </DialogContentText>
-          <Button variant="contained" component="label" fullWidth sx={{ mt: 2 }}>
-            Select File
-            <input type="file" hidden accept=".csv" onChange={handleFileChange} />
-          </Button>
-          {selectedFile && <Typography sx={{ mt: 2 }}>{selectedFile.name}</Typography>}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setUploadDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleUpload} disabled={uploading || !selectedFile}>
-            {uploading ? 'Uploading...' : 'Upload'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Upload Result Dialog */}
-      <Dialog open={!!uploadResult} onClose={() => setUploadResult(null)}>
-        <DialogTitle>Upload Result</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            {uploadResult?.message}
-          </DialogContentText>
-          <Typography>Created: {uploadResult?.created}</Typography>
-          <Typography>Updated: {uploadResult?.updated}</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setUploadResult(null)}>Close</Button>
-        </DialogActions>
+        </form>
       </Dialog>
     </Box>
   );

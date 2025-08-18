@@ -1,138 +1,93 @@
 import api from './config';
 
 export const transactionsAPI = {
-  // Get all transactions
+  // Regular transaction functions (remove /api/ since config adds it)
   getTransactions: async (params = {}) => {
     const response = await api.get('/transactions', { params });
     return response.data;
   },
 
-  // Get transaction by ID
   getTransaction: async (id) => {
     const response = await api.get(`/transactions/${id}`);
     return response.data;
   },
 
-  // Get transaction with items
-  getTransactionWithItems: async (id) => {
-    const response = await api.get(`/transactions/${id}/items`);
+  getTransactionById: async (id) => {
+    const response = await api.get(`/transactions/${id}`);
     return response.data;
   },
 
-  // Create new transaction
   createTransaction: async (transactionData) => {
     const response = await api.post('/transactions', transactionData);
     return response.data;
   },
 
-  // Create transaction with items
-  createTransactionWithItems: async (transactionData, items) => {
-    const response = await api.post('/transactions/with-items', {
-      transaction: transactionData,
-      items: items
-    });
-    return response.data;
-  },
-
-  // Update transaction
   updateTransaction: async (id, transactionData) => {
     const response = await api.put(`/transactions/${id}`, transactionData);
     return response.data;
   },
 
-  // Delete transaction
   deleteTransaction: async (id) => {
     const response = await api.delete(`/transactions/${id}`);
     return response.data;
   },
 
-  // Get transactions by customer
-  getTransactionsByCustomer: async (customerId) => {
-    const response = await api.get(`/transactions/customer/${customerId}`);
-    return response.data;
-  },
-
-  // Get transactions by user
-  getTransactionsByUser: async (userId) => {
-    const response = await api.get(`/transactions/user/${userId}`);
-    return response.data;
-  },
-
-  // Get transactions by date range
-  getTransactionsByDateRange: async (startDate, endDate) => {
-    const response = await api.get('/transactions/date-range', {
-      params: { startDate, endDate }
-    });
-    return response.data;
-  },
-
-  // Get transactions by status
-  getTransactionsByStatus: async (status) => {
-    const response = await api.get('/transactions/status', { params: { status } });
-    return response.data;
-  },
-
-  // Get transactions by payment method
-  getTransactionsByPaymentMethod: async (paymentMethod) => {
-    const response = await api.get('/transactions/payment-method', { params: { paymentMethod } });
-    return response.data;
-  },
-
-  // Get sales statistics
-  getSalesStats: async (startDate = null, endDate = null) => {
-    const params = {};
-    if (startDate) params.startDate = startDate;
-    if (endDate) params.endDate = endDate;
-    const response = await api.get('/transactions/sales-stats', { params });
-    return response.data;
-  },
-
-  // Process return/exchange
-  processReturn: async (id, returnData) => {
-    const response = await api.post(`/transactions/${id}/return`, returnData);
-    return response.data;
-  },
-
-  // Update transaction status
-  updateTransactionStatus: async (id, status) => {
-    const response = await api.patch(`/transactions/${id}/status`, { status });
-    return response.data;
-  },
-
-  // Get invoice
-  getInvoice: async (id, format = 'pdf') => {
-    const config = { params: { format } };
-    if (format === 'csv') {
-      config.responseType = 'blob'; // Important for CSV download
-    }
+  // Invoice functions (remove /api/ since config adds it)
+  getInvoice: async (transactionId, format = 'pdf') => {
     try {
-      const response = await api.get(`/transactions/${id}/invoice`, config);
-      console.log('API Response for invoice:', response);
-      return response;
+      if (format === 'csv') {
+        // Use blob response type for CSV
+        const response = await api.get(`/invoices/${transactionId}/csv`, {
+          responseType: 'blob'
+        });
+        return response;
+      } else {
+        // Regular JSON response for HTML/PDF
+        const response = await api.get(`/invoices/${transactionId}`, { params: { format } });
+        return response.data;
+      }
     } catch (error) {
       console.error('API Error in getInvoice:', error);
       throw error;
     }
   },
 
-  // Get EMI details
-  getEMIDetails: async (id) => {
-    const response = await api.get(`/transactions/${id}/emi`);
+  downloadInvoice: async (transactionId) => {
+    return api.get(`/invoices/${transactionId}/download`, { responseType: 'blob' });
+  },
+
+  previewInvoice: async (transactionId) => {
+    const response = await api.get(`/invoices/${transactionId}/preview`);
     return response.data;
   },
 
-  // Update EMI payment
-  updateEMIPayment: async (id, paymentData) => {
-    const response = await api.post(`/transactions/${id}/emi-payment`, paymentData);
-    return response.data;
+  // Alternative: Get invoice through transactions endpoint
+  getTransactionInvoice: async (transactionId, format = 'pdf') => {
+    const config = { params: { format } };
+    if (format === 'csv') {
+      config.responseType = 'blob';
+    }
+    try {
+      const response = await api.get(`/transactions/${transactionId}/invoice`, config);
+      return response.data;
+    } catch (error) {
+      console.error('API Error in getTransactionInvoice:', error);
+      throw error;
+    }
   },
 
-  uploadCSV: async (formData) => {
-    const response = await api.post('/transactions/upload/csv', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
+  // Download CSV specifically
+  downloadCSV: async (transactionId) => {
+    try {
+      const response = await api.get(`/invoices/${transactionId}/csv`, {
+        responseType: 'blob'  // Important for CSV download
+      });
+      return response;
+    } catch (error) {
+      console.error('API Error in downloadCSV:', error);
+      throw error;
+    }
   },
-}; 
+};
+
+export default transactionsAPI;

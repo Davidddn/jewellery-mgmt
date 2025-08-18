@@ -2,8 +2,15 @@ import api from './config';
 
 export const settingsAPI = {
   getLogo: async () => {
-    const response = await api.get('/settings/logo');
-    return response.data;
+    try {
+      const response = await api.get('/settings/logo', {
+        responseType: 'blob'
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching logo:', error);
+      return null;
+    }
   },
 
   uploadLogo: async (file) => {
@@ -16,4 +23,16 @@ export const settingsAPI = {
     });
     return response.data;
   },
+
+  getSettings: async () => {
+    const response = await api.get('/settings');
+    return response.data;
+  },
+
+  updateSettings: async (settings) => {
+    const response = await api.put('/settings', settings);
+    return response.data;
+  }
 };
+
+export default settingsAPI;

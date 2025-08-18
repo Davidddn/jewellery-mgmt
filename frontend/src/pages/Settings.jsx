@@ -41,6 +41,22 @@ const userManagementSchema = (isEditing) => yup.object({
   is_active: yup.boolean(),
 });
 
+const settingsSchema = yup.object({
+  shop_name: yup.string().trim().required('Shop name is required'),
+  shop_address: yup.string().trim().required('Shop address is required'),
+  gst_percentage: yup.number().typeError('GST must be a number').min(0, 'GST cannot be negative').required('GST percentage is required'),
+  phone: yup.string().trim(),
+  email: yup.string().trim().email('Invalid email format'),
+  website: yup.string().trim().url('Invalid URL format'),
+  established_year: yup.number().min(1900, 'Invalid year').max(new Date().getFullYear(), 'Year cannot be in future'),
+  gst_number: yup.string().trim(),
+  pan_number: yup.string().trim(),
+  tax_number: yup.string().trim(),
+  bank_name: yup.string().trim(),
+  bank_account: yup.string().trim(),
+  bank_ifsc: yup.string().trim(),
+});
+
 // --- Components ---
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
@@ -52,6 +68,7 @@ function TabPanel(props) {
 }
 
 const Settings = () => {
+  // 1. HOOKS AND STATE
   const { user, logout, isLoading: isAuthLoading } = useAuth();
   const queryClient = useQueryClient();
   const [currentTab, setCurrentTab] = useState(0);
@@ -60,12 +77,11 @@ const Settings = () => {
   const [userDialogOpen, setUserDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [userFilters, setUserFilters] = useState({ name: '', role: 'all', status: 'all' });
-
-  // New state for logo
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState('');
+  const [logoRefreshKey, setLogoRefreshKey] = useState(0);
 
-  // --- Forms ---
+  // 2. FORMS (DECLARED BEFORE DATA FETCHING)
   const { control: profileControl, handleSubmit: handleProfileSubmit, reset: resetProfileForm, formState: { errors: profileErrors } } = useForm({
     resolver: yupResolver(profileSchema),
     defaultValues: { firstName: '', lastName: '', email: '', phone: '' }
@@ -81,18 +97,26 @@ const Settings = () => {
     defaultValues: { firstName: '', lastName: '', username: '', email: '', phone: '', password: '', role: 'sales', is_active: true }
   });
 
-  useEffect(() => {
-    if (user) {
-      resetProfileForm({
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
-        email: user.email || '',
-        phone: user.phone || '',
-      });
+  const { control: settingsControl, handleSubmit: handleSettingsSubmit, reset: resetSettingsForm, formState: { errors: settingsErrors } } = useForm({
+    resolver: yupResolver(settingsSchema),
+    defaultValues: { 
+      shop_name: '', 
+      shop_address: '', 
+      gst_percentage: '',
+      phone: '',
+      email: '',
+      website: '',
+      established_year: '',
+      gst_number: '',
+      pan_number: '',
+      tax_number: '',
+      bank_name: '',
+      bank_account: '',
+      bank_ifsc: ''
     }
-  }, [user, resetProfileForm]);
+  });
 
-  // --- Data Fetching ---
+  // 3. DATA FETCHING (BEFORE EFFECTS THAT USE THE DATA)
   const { data: usersData, isLoading: isUsersLoading } = useQuery({
     queryKey: ['users', userFilters],
     queryFn: () => usersAPI.getAllUsers(userFilters),
@@ -100,17 +124,18 @@ const Settings = () => {
   });
 
   const { data: logoData, isLoading: isLogoLoading } = useQuery({
-    queryKey: ['logo'],
+    queryKey: ['logo', logoRefreshKey],
     queryFn: () => settingsAPI.getLogo(),
+    retry: 1,
+    refetchOnWindowFocus: false
   });
 
-  useEffect(() => {
-    if (logoData?.logoUrl) {
-      setLogoPreview(logoData.logoUrl);
-    }
-  }, [logoData]);
+  const { data: settingsData, isLoading: areSettingsLoading } = useQuery({
+    queryKey: ['settings'],
+    queryFn: () => settingsAPI.getSettings(),
+  });
 
-  // --- Mutations ---
+  // 4. MUTATIONS
   const updateProfileMutation = useMutation({
     mutationFn: authAPI.updateProfile,
     onSuccess: () => {
@@ -160,16 +185,87 @@ const Settings = () => {
   });
 
   const uploadLogoMutation = useMutation({
-    mutationFn: (file) => settingsAPI.uploadLogo(file),
+    mutationFn: settingsAPI.uploadLogo,
     onSuccess: () => {
-      queryClient.invalidateQueries(['logo']);
-      setSuccessAlert('Logo updated successfully!');
+      setSuccessAlert('Logo uploaded successfully!');
       setLogoFile(null);
+      setLogoRefreshKey(prev => prev + 1);
+      queryClient.invalidateQueries(['logo']);
     },
-    onError: (err) => setErrorAlert(err.response?.data?.message || 'Failed to upload logo.'),
+    onError: (error) => {
+      setErrorAlert('Failed to upload logo: ' + (error.response?.data?.message || error.message));
+    }
   });
 
-  // --- Event Handlers ---
+  const updateSettingsMutation = useMutation({
+    mutationFn: settingsAPI.updateSettings,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['settings']);
+      setSuccessAlert('Settings updated successfully!');
+    },
+    onError: (err) => setErrorAlert(err.response?.data?.message || 'Failed to update settings.'),
+  });
+
+  // 5. EFFECTS (AFTER DATA FETCHING)
+  useEffect(() => {
+    if (user) {
+      resetProfileForm({
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email || '',
+        phone: user.phone || '',
+      });
+    }
+  }, [user, resetProfileForm]);
+
+  useEffect(() => {
+    if (settingsData) {
+      console.log('📝 Populating settings form with data:', settingsData);
+      resetSettingsForm({
+        shop_name: settingsData.shop_name || '',
+        shop_address: settingsData.shop_address || '',
+        gst_percentage: settingsData.gst_percentage || '18',
+        phone: settingsData.phone || '',
+        email: settingsData.email || '',
+        website: settingsData.website || '',
+        established_year: settingsData.established_year || '',
+        gst_number: settingsData.gst_number || '',
+        pan_number: settingsData.pan_number || '',
+        tax_number: settingsData.tax_number || '',
+        bank_name: settingsData.bank_name || '',
+        bank_account: settingsData.bank_account || '',
+        bank_ifsc: settingsData.bank_ifsc || ''
+      });
+    }
+  }, [settingsData, resetSettingsForm]);
+
+  useEffect(() => {
+    if (logoData) {
+      try {
+        const objectUrl = URL.createObjectURL(logoData);
+        setLogoPreview(objectUrl);
+        
+        return () => URL.revokeObjectURL(objectUrl);
+      } catch (error) {
+        console.error('Error creating logo URL:', error);
+        setLogoPreview('');
+      }
+    } else {
+      setLogoPreview('');
+    }
+  }, [logoData]);
+
+  useEffect(() => {
+    if (successAlert || errorAlert) {
+      const timer = setTimeout(() => {
+        setSuccessAlert('');
+        setErrorAlert('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [successAlert, errorAlert]);
+
+  // 6. EVENT HANDLERS AND OTHER FUNCTIONS
   const handleTabChange = (event, newValue) => {
     setCurrentTab(newValue);
     setErrorAlert('');
@@ -201,6 +297,7 @@ const Settings = () => {
   
   const onProfileSave = (data) => updateProfileMutation.mutate(data);
   const onPasswordSave = (data) => changePasswordMutation.mutate(data);
+  const onSettingsSave = (data) => updateSettingsMutation.mutate(data);
   const onUserFormSave = (data) => {
     if (editingUser) {
       if (!data.password) delete data.password;
@@ -233,6 +330,7 @@ const Settings = () => {
     }
   };
 
+  // 7. EARLY RETURNS
   if (isAuthLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
@@ -241,9 +339,23 @@ const Settings = () => {
     );
   }
 
+  // 8. RENDER
   return (
     <Box>
       <Typography variant="h4" gutterBottom>Settings</Typography>
+      
+      {/* Success/Error Alerts */}
+      {errorAlert && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorAlert('')}>
+          {errorAlert}
+        </Alert>
+      )}
+      {successAlert && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessAlert('')}>
+          {successAlert}
+        </Alert>
+      )}
+
       <Paper>
         <Tabs value={currentTab} onChange={handleTabChange}>
           <Tab label="General" />
@@ -255,26 +367,210 @@ const Settings = () => {
 
         {/* General Settings */}
         <TabPanel value={currentTab} index={0}>
-          <Typography variant="h6" gutterBottom>General Settings</Typography>
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle1" gutterBottom>Company Logo</Typography>
-            <Box sx={{ my: 2, border: '1px dashed grey', p: 2, width: 'fit-content' }}>
-              {isLogoLoading ? <CircularProgress /> : (
-                <img src={logoPreview || 'https://via.placeholder.com/200x100.png?text=No+Logo'} alt="Current Logo" style={{ maxWidth: '200px', maxHeight: '100px', display: 'block' }} />
-              )}
-            </Box>
-            <Button variant="contained" component="label">
-              Change Logo
-              <input type="file" hidden accept="image/*" onChange={handleLogoChange} />
-            </Button>
-            {logoFile && (
-              <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Typography>{logoFile.name}</Typography>
-                <Button variant="outlined" onClick={handleLogoUpload} disabled={uploadLogoMutation.isLoading}>
-                  {uploadLogoMutation.isLoading ? <CircularProgress size={24} /> : 'Save Logo'}
+          <Typography variant="h6" gutterBottom>Business Information</Typography>
+          <Box component="form" onSubmit={handleSettingsSubmit(onSettingsSave)} noValidate sx={{ mt: 1 }}>
+            <Grid container spacing={3}>
+              {/* Basic Information */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>Basic Information</Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="shop_name" control={settingsControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Shop Name" error={!!settingsErrors.shop_name} helperText={settingsErrors.shop_name?.message} />
+                } />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="gst_percentage" control={settingsControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="GST Percentage" type="number" error={!!settingsErrors.gst_percentage} helperText={settingsErrors.gst_percentage?.message} />
+                } />
+              </Grid>
+              <Grid item xs={12}>
+                <Controller name="shop_address" control={settingsControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Shop Address" multiline rows={3} error={!!settingsErrors.shop_address} helperText={settingsErrors.shop_address?.message} />
+                } />
+              </Grid>
+
+              {/* Contact Information */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, mt: 2 }}>Contact Information</Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="phone" control={settingsControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Phone Number" />
+                } />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="email" control={settingsControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Email Address" type="email" />
+                } />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="website" control={settingsControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Website URL" />
+                } />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="established_year" control={settingsControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Established Year" type="number" />
+                } />
+              </Grid>
+
+              {/* Legal Information */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, mt: 2 }}>Legal & Tax Information</Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="gst_number" control={settingsControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="GST Number" />
+                } />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="pan_number" control={settingsControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="PAN Number" />
+                } />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="tax_number" control={settingsControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Tax Registration Number" />
+                } />
+              </Grid>
+
+              {/* Banking Information */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, mt: 2 }}>Banking Information</Typography>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="bank_name" control={settingsControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Bank Name" />
+                } />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="bank_account" control={settingsControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Account Number" />
+                } />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller name="bank_ifsc" control={settingsControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="IFSC Code" />
+                } />
+              </Grid>
+
+              {/* Submit Button */}
+              <Grid item xs={12}>
+                <Button 
+                  type="submit" 
+                  variant="contained" 
+                  size="large"
+                  disabled={updateSettingsMutation.isLoading}
+                  sx={{ mt: 2 }}
+                >
+                  {updateSettingsMutation.isLoading ? 'Saving...' : 'Save All Settings'}
                 </Button>
+              </Grid>
+            </Grid>
+          </Box>
+
+          {/* Current Settings Display */}
+          <Box sx={{ mt: 4 }}>
+            <Typography variant="h6" gutterBottom>Current Settings</Typography>
+            <Paper sx={{ p: 2 }}>
+              {areSettingsLoading ? (
+                <CircularProgress />
+              ) : settingsData ? (
+                <Grid container spacing={2}>
+                  {Object.entries(settingsData).map(([key, value]) => (
+                    <Grid item xs={12} sm={6} md={4} key={key}>
+                      <Box sx={{ p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        <Typography variant="caption" color="textSecondary">
+                          {key.replace(/_/g, ' ').toUpperCase()}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                          {value || 'Not set'}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              ) : (
+                <Typography variant="body2" color="textSecondary">
+                  No settings found. Please save some settings first.
+                </Typography>
+              )}
+            </Paper>
+          </Box>
+
+          {/* Logo Section */}
+          <Box sx={{ mt: 4 }}>
+            <Typography variant="h6" gutterBottom>Company Logo</Typography>
+            <Paper sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                
+                <Box sx={{ border: '2px dashed #ccc', p: 2, borderRadius: 2, minWidth: 200, textAlign: 'center' }}>
+                  {isLogoLoading ? (
+                    <CircularProgress />
+                  ) : logoPreview ? (
+                    <img 
+                      key={logoRefreshKey}
+                      src={logoPreview} 
+                      alt="Company Logo" 
+                      style={{ 
+                        maxWidth: '200px', 
+                        maxHeight: '100px', 
+                        display: 'block',
+                        objectFit: 'contain',
+                        margin: '0 auto'
+                      }}
+                      onError={(e) => {
+                        console.error('Logo image failed to load');
+                        e.target.style.display = 'none'; // Hide broken image instead of replacing
+                      }}
+                    />
+                  ) : (
+                    // Use a simple text placeholder instead of external image
+                    <Box sx={{ 
+                      width: '200px', 
+                      height: '100px', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      bgcolor: 'grey.100',
+                      color: 'grey.500',
+                      fontSize: '14px',
+                      border: '1px dashed #ccc',
+                      margin: '0 auto'
+                    }}>
+                      No Logo Uploaded
+                    </Box>
+                  )}
+                </Box>
+                <Box>
+                  <Button variant="contained" component="label" sx={{ mb: 1 }}>
+                    Choose New Logo
+                    <input type="file" hidden accept="image/*" onChange={handleLogoChange} />
+                  </Button>
+                  {logoFile && (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        Selected: {logoFile.name}
+                      </Typography>
+                      <Button 
+                        variant="outlined" 
+                        onClick={handleLogoUpload} 
+                        disabled={uploadLogoMutation.isLoading}
+                      >
+                        {uploadLogoMutation.isLoading ? 'Uploading...' : 'Upload Logo'}
+                      </Button>
+                    </Box>
+                  )}
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="caption" color="textSecondary">
+                      Accepted formats: JPG, PNG. Max size: 5MB<br/>
+                      The latest uploaded logo will be displayed.
+                    </Typography>
+                  </Box>
+                </Box>
               </Box>
-            )}
+            </Paper>
           </Box>
         </TabPanel>
 
@@ -283,13 +579,37 @@ const Settings = () => {
           <Typography variant="h6" gutterBottom>My Profile</Typography>
           <Box component="form" onSubmit={handleProfileSubmit(onProfileSave)} noValidate sx={{ mt: 1 }}>
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}><Controller name="firstName" control={profileControl} render={({ field }) => <TextField {...field} fullWidth label="First Name" error={!!profileErrors.firstName} helperText={profileErrors.firstName?.message} />} /></Grid>
-              <Grid item xs={12} sm={6}><Controller name="lastName" control={profileControl} render={({ field }) => <TextField {...field} fullWidth label="Last Name" error={!!profileErrors.lastName} helperText={profileErrors.lastName?.message} />} /></Grid>
-              <Grid item xs={12} sm={6}><Controller name="email" control={profileControl} render={({ field }) => <TextField {...field} fullWidth label="Email Address" type="email" error={!!profileErrors.email} helperText={profileErrors.email?.message} />} /></Grid>
-              <Grid item xs={12} sm={6}><Controller name="phone" control={profileControl} render={({ field }) => <TextField {...field} fullWidth label="Phone Number" error={!!profileErrors.phone} helperText={profileErrors.phone?.message} />} /></Grid>
-              <Grid item xs={12} sm={6}><TextField fullWidth label="Username" value={user?.username || ''} disabled /></Grid>
-              <Grid item xs={12} sm={6}><TextField fullWidth label="Role" value={user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : ''} disabled /></Grid>
-              <Grid item xs={12}><Button type="submit" variant="contained" disabled={updateProfileMutation.isLoading}>Save Profile</Button></Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="firstName" control={profileControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="First Name" error={!!profileErrors.firstName} helperText={profileErrors.firstName?.message} />
+                } />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="lastName" control={profileControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Last Name" error={!!profileErrors.lastName} helperText={profileErrors.lastName?.message} />
+                } />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="email" control={profileControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Email Address" type="email" error={!!profileErrors.email} helperText={profileErrors.email?.message} />
+                } />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="phone" control={profileControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Phone Number" error={!!profileErrors.phone} helperText={profileErrors.phone?.message} />
+                } />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField fullWidth label="Username" value={user?.username || ''} disabled />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField fullWidth label="Role" value={user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : ''} disabled />
+              </Grid>
+              <Grid item xs={12}>
+                <Button type="submit" variant="contained" disabled={updateProfileMutation.isLoading}>
+                  {updateProfileMutation.isLoading ? 'Saving...' : 'Save Profile'}
+                </Button>
+              </Grid>
             </Grid>
           </Box>
         </TabPanel>
@@ -298,10 +618,18 @@ const Settings = () => {
         <TabPanel value={currentTab} index={2}>
           <Typography variant="h6" gutterBottom>Change Password</Typography>
           <Box component="form" onSubmit={handlePasswordSubmit(onPasswordSave)} noValidate sx={{ mt: 1, maxWidth: 400 }}>
-            <Controller name="currentPassword" control={passwordControl} render={({ field }) => <TextField {...field} fullWidth margin="normal" label="Current Password" type="password" error={!!passwordErrors.currentPassword} helperText={passwordErrors.currentPassword?.message} />} />
-            <Controller name="newPassword" control={passwordControl} render={({ field }) => <TextField {...field} fullWidth margin="normal" label="New Password" type="password" error={!!passwordErrors.newPassword} helperText={passwordErrors.newPassword?.message} />} />
-            <Controller name="confirmPassword" control={passwordControl} render={({ field }) => <TextField {...field} fullWidth margin="normal" label="Confirm New Password" type="password" error={!!passwordErrors.confirmPassword} helperText={passwordErrors.confirmPassword?.message} />} />
-            <Button type="submit" variant="contained" sx={{ mt: 2 }} disabled={changePasswordMutation.isLoading}>Change Password</Button>
+            <Controller name="currentPassword" control={passwordControl} render={({ field }) => 
+              <TextField {...field} fullWidth margin="normal" label="Current Password" type="password" error={!!passwordErrors.currentPassword} helperText={passwordErrors.currentPassword?.message} />
+            } />
+            <Controller name="newPassword" control={passwordControl} render={({ field }) => 
+              <TextField {...field} fullWidth margin="normal" label="New Password" type="password" error={!!passwordErrors.newPassword} helperText={passwordErrors.newPassword?.message} />
+            } />
+            <Controller name="confirmPassword" control={passwordControl} render={({ field }) => 
+              <TextField {...field} fullWidth margin="normal" label="Confirm New Password" type="password" error={!!passwordErrors.confirmPassword} helperText={passwordErrors.confirmPassword?.message} />
+            } />
+            <Button type="submit" variant="contained" sx={{ mt: 2 }} disabled={changePasswordMutation.isLoading}>
+              {changePasswordMutation.isLoading ? 'Changing...' : 'Change Password'}
+            </Button>
           </Box>
         </TabPanel>
 
@@ -310,7 +638,9 @@ const Settings = () => {
           <TabPanel value={currentTab} index={3}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6">User List</Typography>
-              <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenUserDialog()}>Add User</Button>
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenUserDialog()}>
+                Add User
+              </Button>
             </Box>
 
             <Paper sx={{ p: 2, mb: 2 }}>
@@ -343,17 +673,21 @@ const Settings = () => {
               </Grid>
             </Paper>
 
-            {isUsersLoading ? <CircularProgress /> : (
+            {isUsersLoading ? (
+              <CircularProgress />
+            ) : (
               <TableContainer component={Paper}>
                 <Table>
-                  <TableHead><TableRow>
-                    <TableCell>Full Name</TableCell>
-                    <TableCell>Username</TableCell>
-                    <TableCell>Email</TableCell>
-                    <TableCell>Role</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell align="right">Actions</TableCell>
-                  </TableRow></TableHead>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Full Name</TableCell>
+                      <TableCell>Username</TableCell>
+                      <TableCell>Email</TableCell>
+                      <TableCell>Role</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell align="right">Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
                   <TableBody>
                     {Array.isArray(usersData?.users) && usersData.users.map((u) => (
                       <TableRow key={u.id}>
@@ -363,8 +697,12 @@ const Settings = () => {
                         <TableCell sx={{ textTransform: 'capitalize' }}>{u.role}</TableCell>
                         <TableCell>{u.is_active ? 'Active' : 'Inactive'}</TableCell>
                         <TableCell align="right">
-                          <IconButton onClick={() => handleOpenUserDialog(u)} color="primary" disabled={u.id === user.id}><EditIcon /></IconButton>
-                          <IconButton onClick={() => handleDeleteUser(u.id)} color="error" disabled={u.id === user.id}><DeleteIcon /></IconButton>
+                          <IconButton onClick={() => handleOpenUserDialog(u)} color="primary" disabled={u.id === user.id}>
+                            <EditIcon />
+                          </IconButton>
+                          <IconButton onClick={() => handleDeleteUser(u.id)} color="error" disabled={u.id === user.id}>
+                            <DeleteIcon />
+                          </IconButton>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -375,6 +713,7 @@ const Settings = () => {
           </TabPanel>
         )}
 
+        {/* Data Management (Admin Only) */}
         {user?.role === 'admin' && (
           <TabPanel value={currentTab} index={4}>
             <Typography variant="h6" gutterBottom>Data Management</Typography>
@@ -389,9 +728,6 @@ const Settings = () => {
             </Box>
           </TabPanel>
         )}
-        
-        {errorAlert && <Alert severity="error" sx={{ m: 2 }} onClose={() => setErrorAlert('')}>{errorAlert}</Alert>}
-        {successAlert && <Alert severity="success" sx={{ m: 2 }} onClose={() => setSuccessAlert('')}>{successAlert}</Alert>}
       </Paper>
 
       {/* Add/Edit User Dialog */}
@@ -400,29 +736,61 @@ const Settings = () => {
         <Box component="form" onSubmit={handleUserFormSubmit(onUserFormSave)}>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12} sm={6}><Controller name="firstName" control={userFormControl} render={({ field }) => <TextField {...field} fullWidth label="First Name" error={!!userFormErrors.firstName} helperText={userFormErrors.firstName?.message} />} /></Grid>
-              <Grid item xs={12} sm={6}><Controller name="lastName" control={userFormControl} render={({ field }) => <TextField {...field} fullWidth label="Last Name" error={!!userFormErrors.lastName} helperText={userFormErrors.lastName?.message} />} /></Grid>
-              <Grid item xs={12} sm={6}><Controller name="username" control={userFormControl} render={({ field }) => <TextField {...field} fullWidth label="Username" error={!!userFormErrors.username} helperText={userFormErrors.username?.message} />} /></Grid>
-              <Grid item xs={12} sm={6}><Controller name="email" control={userFormControl} render={({ field }) => <TextField {...field} fullWidth label="Email" type="email" error={!!userFormErrors.email} helperText={userFormErrors.email?.message} />} /></Grid>
-              <Grid item xs={12}><Controller name="phone" control={userFormControl} render={({ field }) => <TextField {...field} fullWidth label="Phone" error={!!userFormErrors.phone} helperText={userFormErrors.phone?.message} />} /></Grid>
-              <Grid item xs={12}><Controller name="password" control={userFormControl} render={({ field }) => <TextField {...field} fullWidth label="Password" type="password" error={!!userFormErrors.password} helperText={editingUser ? 'Leave blank to keep current' : userFormErrors.password?.message} />} /></Grid>
-              <Grid item xs={12}><Controller name="role" control={userFormControl} render={({ field }) => (
-                <FormControl fullWidth error={!!userFormErrors.role}>
-                  <InputLabel>Role</InputLabel>
-                  <Select {...field} label="Role">
-                    <MenuItem value="sales">Sales</MenuItem>
-                    <MenuItem value="inventory">Inventory</MenuItem>
-                    <MenuItem value="manager">Manager</MenuItem>
-                    <MenuItem value="admin">Admin</MenuItem>
-                  </Select>
-                </FormControl>
-              )} /></Grid>
-               <Grid item xs={12}><Controller name="is_active" control={userFormControl} render={({ field }) => <FormControlLabel control={<Switch {...field} checked={field.value} />} label="User Active" />} /></Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="firstName" control={userFormControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="First Name" error={!!userFormErrors.firstName} helperText={userFormErrors.firstName?.message} />
+                } />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="lastName" control={userFormControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Last Name" error={!!userFormErrors.lastName} helperText={userFormErrors.lastName?.message} />
+                } />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="username" control={userFormControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Username" error={!!userFormErrors.username} helperText={userFormErrors.username?.message} />
+                } />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller name="email" control={userFormControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Email" type="email" error={!!userFormErrors.email} helperText={userFormErrors.email?.message} />
+                } />
+              </Grid>
+              <Grid item xs={12}>
+                <Controller name="phone" control={userFormControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Phone" error={!!userFormErrors.phone} helperText={userFormErrors.phone?.message} />
+                } />
+              </Grid>
+              <Grid item xs={12}>
+                <Controller name="password" control={userFormControl} render={({ field }) => 
+                  <TextField {...field} fullWidth label="Password" type="password" error={!!userFormErrors.password} helperText={editingUser ? 'Leave blank to keep current' : userFormErrors.password?.message} />
+                } />
+              </Grid>
+              <Grid item xs={12}>
+                <Controller name="role" control={userFormControl} render={({ field }) => (
+                  <FormControl fullWidth error={!!userFormErrors.role}>
+                    <InputLabel>Role</InputLabel>
+                    <Select {...field} label="Role">
+                      <MenuItem value="sales">Sales</MenuItem>
+                      <MenuItem value="inventory">Inventory</MenuItem>
+                      <MenuItem value="manager">Manager</MenuItem>
+                      <MenuItem value="admin">Admin</MenuItem>
+                    </Select>
+                  </FormControl>
+                )} />
+              </Grid>
+              <Grid item xs={12}>
+                <Controller name="is_active" control={userFormControl} render={({ field }) => 
+                  <FormControlLabel control={<Switch {...field} checked={field.value} />} label="User Active" />
+                } />
+              </Grid>
             </Grid>
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseUserDialog}>Cancel</Button>
-            <Button type="submit" variant="contained">{editingUser ? 'Save Changes' : 'Create User'}</Button>
+            <Button type="submit" variant="contained" disabled={createUserMutation.isLoading || updateUserMutation.isLoading}>
+              {editingUser ? 'Save Changes' : 'Create User'}
+            </Button>
           </DialogActions>
         </Box>
       </Dialog>

@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Toolbar, Typography, Box, useTheme, useMediaQuery, CircularProgress } from '@mui/material';
 import { NavLink } from 'react-router-dom';
-import { Dashboard, ShoppingCart, People, Receipt, Assessment, Settings, VerifiedUser, Loyalty as LoyaltyIcon } from '@mui/icons-material';
+import { Dashboard, ShoppingCart, People, Receipt, Assessment, Settings, VerifiedUser, Loyalty as LoyaltyIcon, MonetizationOn } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { settingsAPI } from '../../api/settings';
 
@@ -15,6 +15,7 @@ const navItems = [
   { text: 'Sales', icon: <ShoppingCart />, path: '/sales' },
   { text: 'Reports', icon: <Assessment />, path: '/reports' },
   { text: 'Settings', icon: <Settings />, path: '/settings' },
+  { text: 'Gold Rate', icon: <MonetizationOn />, path: '/gold-rate' },
   { text: 'Hallmarking', icon: <VerifiedUser />, path: '/admin/hallmarking' },
   { text: 'Loyalty', icon: <LoyaltyIcon />, path: '/admin/loyalty' },
 ];
@@ -22,19 +23,30 @@ const navItems = [
 const Sidebar = ({ isOpen, onClose }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [logoPreview, setLogoPreview] = useState('');
 
   const { data: logoData, isLoading: isLogoLoading } = useQuery({
     queryKey: ['logo'],
     queryFn: () => settingsAPI.getLogo(),
   });
 
+  useEffect(() => {
+    if (logoData) {
+      const blob = new Blob([logoData], { type: 'image/jpeg' });
+      const objectUrl = URL.createObjectURL(blob);
+      setLogoPreview(objectUrl);
+
+      return () => URL.revokeObjectURL(objectUrl);
+    }
+  }, [logoData]);
+
   const drawerContent = (
     <div>
       <Toolbar sx={{ justifyContent: 'center', py: 2, borderBottom: `1px solid ${theme.palette.divider}` }}>
         {isLogoLoading ? (
           <CircularProgress size={24} />
-        ) : logoData?.logoUrl ? (
-          <img src={logoData.logoUrl} alt="Logo" style={{ maxHeight: 40, maxWidth: '80%' }} />
+        ) : logoPreview ? (
+          <img src={logoPreview} alt="Logo" style={{ maxHeight: 40, maxWidth: '80%' }} />
         ) : (
           <Typography variant="h6" noWrap component="div" sx={{ color: 'primary.main', fontWeight: 'bold' }}>
             JewelPro

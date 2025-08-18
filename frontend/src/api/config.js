@@ -1,10 +1,16 @@
 import axios from 'axios';
 
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+// You can also export other config values
+export const API_TIMEOUT = 10000;
+export const DEFAULT_HEADERS = {
+  'Content-Type': 'application/json',
+};
+
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  baseURL: API_BASE_URL + '/api', // ← Add '/api' back here
+  headers: DEFAULT_HEADERS
 });
 
 // Track if we're already redirecting to prevent loops

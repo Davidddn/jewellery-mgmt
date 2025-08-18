@@ -16,6 +16,7 @@ const helmet = require('helmet');
 const { sequelize, testSqliteConnection } = require('./config/database');
 const logger = require('./utils/logger');
 const { User } = require('./models');
+const path = require('path');
 
 // Import your route files
  const auditLogsRoutes = require('./routes/auditLogs');
@@ -31,6 +32,7 @@ const { User } = require('./models');
  const userRoutes = require('./routes/users');
  const settingsRoutes = require('./routes/settings');
  const importsRoutes = require('./routes/imports');
+const invoiceRoutes = require('./routes/invoices');
 
 const initializeDatabase = async (User) => {
     // Test database connection
@@ -70,32 +72,22 @@ const startServer = async () => {
     const PORT = process.env.PORT || 5000;
 
     // CORS configuration - Use your existing ALLOWED_ORIGINS from .env
-    const corsOptions = {
-        origin: process.env.ALLOWED_ORIGINS 
-            ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-            : [
-                'http://localhost:3000',
-                'http://localhost:3001',
-                'http://localhost:5173',
-                'http://localhost:4173',
-                'http://127.0.0.1:3000',
-                'http://127.0.0.1:3001'
-            ],
-        credentials: true,
-        optionsSuccessStatus: 200,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-        allowedHeaders: [
-            'Content-Type', 
-            'Authorization', 
-            'x-auth-token',
-            'Accept',
-            'Origin',
-            'X-Requested-With'
-        ]
-    };
+    app.use(cors({
+      origin: process.env.NODE_ENV === 'production' 
+        ? process.env.FRONTEND_URL 
+        : ['http://localhost:3000', 'http://localhost:3001'],
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: [
+        'Content-Type', 
+        'Authorization', 
+        'Cache-Control',
+        'Pragma',
+        'Expires'
+      ]
+    }));
 
     // Middleware
-    app.use(cors(corsOptions));
     app.use(helmet({
         crossOriginEmbedderPolicy: false, // Allow CORS
         crossOriginResourcePolicy: { policy: "cross-origin" }
@@ -105,7 +97,7 @@ const startServer = async () => {
     app.use(morgan('dev'));
 
     // Serve static files from the 'uploads' directory
-    app.use('/uploads', express.static('uploads'));
+    app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
     // Health check endpoint
     app.get('/health', (req, res) => {
@@ -116,8 +108,6 @@ const startServer = async () => {
     app.use('/api/gold-rates', require('./routes/goldRate'));
     app.use('/api/auth', authRoutes);
     app.use('/api/users', userRoutes);
-    
-    // Add other API routes here as needed
     app.use('/api/products', productRoutes);
     app.use('/api/reports', reportingRoutes);
     app.use('/api/customers', customersRoutes);
@@ -127,6 +117,7 @@ const startServer = async () => {
     app.use('/api/transactions', transactionsRoutes);
     app.use('/api/settings', settingsRoutes);
     app.use('/api/imports', importsRoutes);
+    app.use('/api/invoices', invoiceRoutes);
 
     // 404 Not Found Handler
     app.use((req, res, next) => {
@@ -167,15 +158,31 @@ const startServer = async () => {
     // Graceful shutdown
     process.on('SIGTERM', async () => {
         logger.info('SIGTERM received, shutting down gracefully');
-        const { closeConnections } = require('./config/database');
-        await closeConnections();
+        
+        // Close database connections
+        try {
+            const { closeConnections } = require('./config/database');
+            await closeConnections();
+            console.log('Database connections closed successfully');
+        } catch (error) {
+            console.error('Error closing database connections:', error);
+        }
+        
         process.exit(0);
     });
 
     process.on('SIGINT', async () => {
         logger.info('SIGINT received, shutting down gracefully');
-        const { closeConnections } = require('./config/database');
-        await closeConnections();
+        
+        // Close database connections
+        try {
+            const { closeConnections } = require('./config/database');
+            await closeConnections();
+            console.log('Database connections closed successfully');
+        } catch (error) {
+            console.error('Error closing database connections:', error);
+        }
+        
         process.exit(0);
     });
 };

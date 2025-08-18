@@ -3,7 +3,7 @@ import {
   Typography, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, CircularProgress, Alert, Chip, TextField, IconButton, Menu, MenuItem, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle
 } from '@mui/material';
 import { Download as DownloadIcon, Upload as UploadIcon } from '@mui/icons-material';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { transactionsAPI } from '../api/transactions';
 
 const getStatusChipColor = (status) => {
@@ -48,12 +48,55 @@ const Transactions = () => {
     if (!selectedTransactionId) return;
 
     setDownloadingId(selectedTransactionId);
-    handleDownloadMenuClose(); // Close menu immediately
+    handleDownloadMenuClose();
 
     try {
-      const response = await transactionsAPI.getInvoice(selectedTransactionId, format);
-      if (format === 'pdf') {
-        if (response.pdf_data) {
+      console.log(`Downloading invoice for transaction ${selectedTransactionId} in ${format} format`);
+      
+      if (format === 'csv') {
+        // Handle CSV download with blob response
+        const response = await transactionsAPI.downloadCSV(selectedTransactionId);
+        
+        if (response.data) {
+          const blob = new Blob([response.data], { type: 'text/csv' });
+          const fileURL = URL.createObjectURL(blob);
+          
+          const link = document.createElement('a');
+          link.href = fileURL;
+          link.download = `Transaction-${selectedTransactionId}.csv`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(fileURL);
+          
+          console.log('CSV downloaded successfully');
+          alert('Transaction data downloaded successfully as CSV file!');
+        } else {
+          console.error('Failed to download CSV: No data in response');
+          alert('Could not download CSV. Please try again.');
+        }
+        
+      } else {
+        // Handle PDF/HTML download (existing code)
+        const response = await transactionsAPI.getInvoice(selectedTransactionId, format);
+        console.log('Invoice API response:', response);
+        
+        if (response.success && response.html_data) {
+          const blob = new Blob([response.html_data], { type: 'text/html' });
+          const fileURL = URL.createObjectURL(blob);
+          
+          const link = document.createElement('a');
+          link.href = fileURL;
+          link.download = `Invoice-${selectedTransactionId}.html`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(fileURL);
+          
+          console.log('Invoice downloaded as HTML successfully');
+          alert('Invoice downloaded successfully! You can open the HTML file in your browser and print it as PDF.' );
+          
+        } else if (response.pdf_data) {
           const binaryString = atob(response.pdf_data);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
@@ -69,26 +112,19 @@ const Transactions = () => {
           link.click();
           document.body.removeChild(link);
           URL.revokeObjectURL(fileURL);
+          
+          console.log('Invoice downloaded as PDF successfully');
+          alert('Invoice downloaded successfully as PDF file');
+          
         } else {
-            console.error('Failed to download invoice: No PDF data in response');
-            alert('Could not download invoice. Please try again.');
+          console.error('Failed to download invoice: No PDF or HTML data in response', response);
+          alert('Could not download invoice. Server response format not recognized.');
         }
-      } else if (format === 'csv') {
-          const fileURL = URL.createObjectURL(response.data);
-          const link = document.createElement('a');
-          link.href = fileURL;
-          link.download = `Invoice-${selectedTransactionId}.csv`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(fileURL);
-      } else {
-          console.error('Failed to download invoice: Unsupported format');
-          alert('Could not download invoice. Please try again.');
       }
+      
     } catch (err) {
-      console.error('Failed to download invoice from API:', err);
-      alert('An error occurred while downloading the invoice.');
+      console.error('Failed to download from API:', err);
+      alert(`An error occurred while downloading: ${err.message}`);
     } finally {
       setDownloadingId(null);
     }
@@ -120,6 +156,20 @@ const Transactions = () => {
     }
   };
 
+  const handleExportCSV = async () => {
+    try {
+      const response = await transactionsAPI.exportCSV();
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'transactions.csv');
+      document.body.appendChild(link);
+      link.click();
+    } catch (error) {
+      setErrorAlert(error.response?.data?.message || 'Failed to export CSV.');
+    }
+  };
+
   const transactions = data?.transactions || [];
 
   return (
@@ -136,6 +186,7 @@ const Transactions = () => {
           sx={{ minWidth: '250px' }} 
         />
         <Button variant="contained" startIcon={<UploadIcon />} onClick={() => setUploadDialogOpen(true)}>Upload CSV</Button>
+        <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleExportCSV}>Export to CSV</Button>
         </Box>
       </Box>
       <Box sx={{ width: '100%', maxWidth: '1200px' }}>

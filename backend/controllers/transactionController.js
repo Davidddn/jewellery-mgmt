@@ -404,3 +404,20 @@ exports.uploadCSV = async (req, res) => {
       });
     });
 };
+
+exports.exportCSV = async (req, res) => {
+  try {
+    const transactions = await Transaction.findAll({
+      include: [{ model: Customer, as: 'customer', attributes: ['name', 'phone'] }],
+    });
+    const fields = ['id', 'customer.name', 'customer.phone', 'createdAt', 'transaction_status', 'final_amount'];
+    const json2csvParser = new Parser({ fields });
+    const csv = json2csvParser.parse(transactions);
+
+    res.header('Content-Type', 'text/csv');
+    res.attachment('transactions.csv');
+    res.send(csv);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

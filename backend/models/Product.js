@@ -87,6 +87,25 @@ module.exports = (sequelize) => {
     back_image_url: {
       type: DataTypes.STRING(255),
     },
+    // ADD THIS NEW FIELD FOR TAGS
+    tags: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Comma-separated tags for search and categorization',
+      get() {
+        const rawValue = this.getDataValue('tags');
+        return rawValue ? rawValue.split(',').map(tag => tag.trim()) : [];
+      },
+      set(value) {
+        if (Array.isArray(value)) {
+          this.setDataValue('tags', value.join(','));
+        } else if (typeof value === 'string') {
+          this.setDataValue('tags', value);
+        } else {
+          this.setDataValue('tags', null);
+        }
+      }
+    }
   }, {
     sequelize,
     modelName: 'Product',

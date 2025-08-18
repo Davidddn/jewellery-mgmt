@@ -1,6 +1,32 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Box, TextField, Button, Typography, List, ListItem, ListItemText, Paper, Grid, Divider, IconButton, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
-import { AddShoppingCart, Delete } from '@mui/icons-material';
+import { 
+  Box, 
+  TextField, 
+  Button, 
+  Typography, 
+  List, 
+  ListItem, 
+  ListItemText, 
+  Paper, 
+  Grid, 
+  Divider, 
+  IconButton, 
+  Dialog, 
+  DialogTitle, 
+  DialogContent, 
+  DialogActions,
+  CircularProgress,
+  Menu,
+  MenuItem
+} from '@mui/material';
+import { 
+  AddShoppingCart, 
+  Delete, 
+  Print, 
+  Preview, 
+  Download,
+  MoreVert
+} from '@mui/icons-material';
 import { productsAPI } from '../api/products';
 import { transactionsAPI } from '../api/transactions';
 import { customersAPI } from '../api/customers';
@@ -30,6 +56,11 @@ const Sales = () => {
     phone: '',
     email: '',
   });
+
+  // Loading and menu states
+  const [downloadingId, setDownloadingId] = useState(null);
+  const [lastTransactionId, setLastTransactionId] = useState(null);
+  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
 
   // Refs for debouncing
   const customerTimeoutRef = useRef(null);
@@ -361,37 +392,188 @@ const Sales = () => {
     };
 
     try {
+      setDownloadingId('creating'); // Show loading during transaction creation
       const response = await transactionsAPI.createTransaction(transactionData);
       if (response.success) {
+        setLastTransactionId(response.transaction.id);
         alert('Transaction created successfully!');
         handleClearCart();
         handleClearCustomer();
-        handlePrintBill(response.transaction.id);
+        await handlePrintBill(response.transaction.id);
       } else {
         alert(response.message || 'Failed to create transaction.');
       }
     } catch (error) {
       console.error('Error creating transaction:', error);
       alert('Error creating transaction.');
+    } finally {
+      setDownloadingId(null);
     }
   };
 
   const handlePrintBill = async (transactionId) => {
     try {
-      // Check if getBill method exists
-      if (typeof transactionsAPI.getBill === 'function') {
-        const response = await transactionsAPI.getBill(transactionId);
-        const file = new Blob([response], { type: 'application/pdf' });
-        const fileURL = URL.createObjectURL(file);
-        window.open(fileURL);
+      setDownloadingId(transactionId);
+      
+      console.log(`Printing bill for transaction ${transactionId}`);
+      
+      // Use the same working API pattern as Transactions.jsx
+      const response = await transactionsAPI.getInvoice(transactionId, 'pdf');
+      console.log('Invoice API response:', response);
+      
+      if (response.success && response.html_data) {
+        // Create HTML blob and open for printing
+        const blob = new Blob([response.html_data], { type: 'text/html' });
+        const fileURL = URL.createObjectURL(blob);
+        
+        // Open in new window for printing
+        const printWindow = window.open(fileURL, '_blank');
+        if (printWindow) {
+          printWindow.onload = () => {
+            // Auto-print when loaded
+            setTimeout(() => {
+              printWindow.print();
+            }, 500);
+          };
+        } else {
+          alert('Please allow popups to print the invoice');
+        }
+        
+        console.log('Bill opened for printing successfully');
+      } else if (response.pdf_data) {
+        // Handle actual PDF data if available
+        const binaryString = atob(response.pdf_data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: 'application/pdf' });
+        const fileURL = URL.createObjectURL(blob);
+        
+        const printWindow = window.open(fileURL, '_blank');
+        if (printWindow) {
+          printWindow.onload = () => {
+            setTimeout(() => {
+              printWindow.print();
+            }, 500);
+          };
+        }
+        
+        console.log('PDF bill opened for printing successfully');
       } else {
-        // Alternative: Get transaction details and create a simple bill
-        console.log('getBill method not available, creating simple bill...');
+        console.error('No invoice data received:', response);
+        // Fallback to simple bill
         await handleCreateSimpleBill(transactionId);
       }
     } catch (error) {
       console.error('Error printing bill:', error);
-      alert('Failed to generate/print bill. Transaction was created successfully.');
+      
+      // Fallback to simple HTML bill
+      try {
+        await handleCreateSimpleBill(transactionId);
+      } catch (fallbackError) {
+        console.error('Fallback bill generation also failed:', fallbackError);
+        alert('Failed to generate bill. Transaction was created successfully.');
+      }
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handlePreviewInvoice = async (transactionId) => {
+    try {
+      setDownloadingId(transactionId);
+      console.log(`Previewing invoice for transaction ${transactionId}`);
+      
+      // Use the same working API pattern as Transactions.jsx
+      const response = await transactionsAPI.getInvoice(transactionId, 'html');
+      
+      if (response.success && response.html_data) {
+        // Open HTML preview in new window
+        const previewWindow = window.open('', '_blank');
+        if (previewWindow) {
+          previewWindow.document.write(response.html_data);
+          previewWindow.document.close();
+        } else {
+          alert('Please allow popups to preview the invoice');
+        }
+      } else {
+        // Fallback: try direct preview endpoint
+        try {
+          const previewResponse = await transactionsAPI.previewInvoice(transactionId);
+          const previewWindow = window.open('', '_blank');
+          if (previewWindow) {
+            previewWindow.document.write(previewResponse);
+            previewWindow.document.close();
+          }
+        } catch (previewError) {
+          console.error('Preview fallback failed:', previewError);
+          alert('Failed to preview invoice');
+        }
+      }
+    } catch (error) {
+      console.error('Error previewing invoice:', error);
+      alert('Failed to preview invoice');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handleDownloadInvoice = async (transactionId) => {
+    try {
+      setDownloadingId(transactionId);
+      console.log(`Downloading invoice for transaction ${transactionId}`);
+      
+      // Use the same working API pattern as Transactions.jsx
+      const response = await transactionsAPI.getInvoice(transactionId, 'pdf');
+      console.log('Invoice download response:', response);
+      
+      if (response.success && response.html_data) {
+        // Download HTML file
+        const blob = new Blob([response.html_data], { type: 'text/html' });
+        const fileURL = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = fileURL;
+        link.download = `Invoice-${transactionId}.html`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(fileURL);
+        
+        console.log('Invoice downloaded as HTML successfully');
+        alert('Invoice downloaded successfully! You can open the HTML file in your browser and print it as PDF.');
+        
+      } else if (response.pdf_data) {
+        // Handle actual PDF data
+        const binaryString = atob(response.pdf_data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: 'application/pdf' });
+        const fileURL = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = fileURL;
+        link.download = `Invoice-${transactionId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(fileURL);
+        
+        console.log('Invoice downloaded as PDF successfully');
+        alert('Invoice downloaded successfully as PDF file');
+        
+      } else {
+        console.error('Failed to download invoice: No PDF or HTML data in response', response);
+        alert('Could not download invoice. Server response format not recognized.');
+      }
+    } catch (error) {
+      console.error('Error downloading invoice:', error);
+      alert(`Failed to download invoice: ${error.message}`);
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -659,6 +841,15 @@ const Sales = () => {
     `;
   };
 
+  // Menu handlers
+  const handleMenuOpen = (event) => {
+    setMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setMenuAnchorEl(null);
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>Sales Point</Typography>
@@ -861,27 +1052,80 @@ const Sales = () => {
               </List>
             )}
             <Divider sx={{ my: 2 }} />
+            
+            {/* Updated button section with loading states */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="h5">Total: ₹{totalAmount.toFixed(2)}</Typography>
-              <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Button
                   variant="outlined"
                   color="error"
                   onClick={handleClearCart}
                   startIcon={<Delete />}
-                  sx={{ mr: 1 }}
+                  disabled={downloadingId !== null}
                 >
                   Clear Cart
                 </Button>
+                
                 <Button
                   variant="contained"
                   color="primary"
                   onClick={handleCreateTransaction}
-                  startIcon={<AddShoppingCart />}
-                  disabled={cart.length === 0 || !customer}
+                  startIcon={downloadingId === 'creating' ? <CircularProgress size={20} color="inherit" /> : <AddShoppingCart />}
+                  disabled={cart.length === 0 || !customer || downloadingId !== null}
                 >
-                  Create Transaction & Print Bill
+                  {downloadingId === 'creating' ? 'Creating Transaction...' : 
+                   downloadingId ? 'Generating Bill...' : 
+                   'Create Transaction & Print Bill'}
                 </Button>
+
+                {/* Additional Invoice Actions Menu */}
+                {lastTransactionId && (
+                  <>
+                    <IconButton 
+                      onClick={handleMenuOpen}
+                      disabled={downloadingId !== null}
+                    >
+                      <MoreVert />
+                    </IconButton>
+                    <Menu
+                      anchorEl={menuAnchorEl}
+                      open={Boolean(menuAnchorEl)}
+                      onClose={handleMenuClose}
+                    >
+                      <MenuItem 
+                        onClick={() => {
+                          handleMenuClose();
+                          handlePrintBill(lastTransactionId);
+                        }}
+                        disabled={downloadingId !== null}
+                      >
+                        <Print sx={{ mr: 1 }} />
+                        Print Last Invoice
+                      </MenuItem>
+                      <MenuItem 
+                        onClick={() => {
+                          handleMenuClose();
+                          handlePreviewInvoice(lastTransactionId);
+                        }}
+                        disabled={downloadingId !== null}
+                      >
+                        <Preview sx={{ mr: 1 }} />
+                        Preview Last Invoice
+                      </MenuItem>
+                      <MenuItem 
+                        onClick={() => {
+                          handleMenuClose();
+                          handleDownloadInvoice(lastTransactionId);
+                        }}
+                        disabled={downloadingId !== null}
+                      >
+                        <Download sx={{ mr: 1 }} />
+                        Download Last Invoice
+                      </MenuItem>
+                    </Menu>
+                  </>
+                )}
               </Box>
             </Box>
           </Paper>

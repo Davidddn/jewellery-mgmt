@@ -1,96 +1,109 @@
-import api from './config';
+import axios from 'axios';
+import { API_BASE_URL } from './config';
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+});
+
+// Add auth token to requests
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 export const productsAPI = {
   // Get all products
-  getProducts: async (params = {}) => {
-    const response = await api.get('/products', { params });
-    return response.data;
-  },
-
+  getProducts: (params = {}) => 
+    api.get('/api/products', { params }).then(res => res.data),
+  
   // Get product by ID
-  getProduct: async (id) => {
-    const response = await api.get(`/products/${id}`);
-    return response.data;
-  },
-
-  // Get product by SKU
-  getProductBySku: async (sku) => {
-    const response = await api.get(`/products/sku/${sku}`);
-    return response.data;
-  },
-
-  // Get product by barcode
-  getProductByBarcode: async (barcode) => {
-    const response = await api.get(`/products/barcode/${barcode}`);
-    return response.data;
-  },
-
+  getProductById: (id) => 
+    api.get(`/api/products/${id}`).then(res => res.data),
+  
   // Create new product
-  createProduct: async (productData) => {
-    const response = await api.post('/products', productData);
-    return response.data;
-  },
-
+  createProduct: (formData) => 
+    api.post('/api/products', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data),
+  
   // Update product
-  updateProduct: async (id, productData) => {
-    const response = await api.put(`/products/${id}`, productData);
-    return response.data;
-  },
-
+  updateProduct: (id, formData) => 
+    api.put(`/api/products/${id}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data),
+  
   // Delete product
-  deleteProduct: async (id) => {
-    const response = await api.delete(`/products/${id}`);
-    return response.data;
-  },
-
-  // Update stock
-  updateStock: async (id, stockData) => {
-    const response = await api.patch(`/products/${id}/stock`, stockData);
-    return response.data;
-  },
-
-  // Get low stock alerts
-  getLowStockAlerts: async () => {
-    const response = await api.get('/products/low-stock');
-    return response.data;
-  },
-
+  deleteProduct: (id) => 
+    api.delete(`/api/products/${id}`).then(res => res.data),
+  
+  // Upload images
+  uploadImages: (id, formData) => 
+    api.post(`/api/products/${id}/images`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data),
+  
+  // Delete image
+  deleteImage: (id, imageType) => 
+    api.delete(`/api/products/${id}/images/${imageType}`).then(res => res.data),
+  
   // Search products
-  searchProducts: async (searchTerm) => {
-    const response = await api.get('/products/search', { params: { q: searchTerm } });
-    return response.data;
-  },
+  searchProducts: (query) => 
+    api.get('/api/products/search', { params: { q: query } }).then(res => res.data),
+  
+  // Get product by barcode
+  getProductByBarcode: (barcode) => 
+    api.get(`/api/products/barcode/${barcode}`).then(res => res.data),
+  
+  // Get product by SKU
+  getProductBySku: (sku) => 
+    api.get(`/api/products/sku/${sku}`).then(res => res.data),
+  
+  // Export CSV
+  exportCSV: () => 
+    api.get('/api/products/export/csv', { responseType: 'blob' }),
+  
+  // Upload CSV
+  uploadCSV: (formData) => 
+    api.post('/api/products/upload/csv', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data),
 
-  // Get products by category
-  getProductsByCategory: async (category) => {
-    const response = await api.get('/products/category', { params: { category } });
-    return response.data;
-  },
+  // Get all unique tags
+  getAllTags: () => 
+    api.get('/api/products/tags').then(res => res.data),
 
-  // Get products by metal type
-  getProductsByMetalType: async (metalType) => {
-    const response = await api.get('/products/metal-type', { params: { metalType } });
-    return response.data;
-  },
+  // Search products with tags support
+  searchProductsWithFilters: (params = {}) => 
+    api.get('/api/products', { params }).then(res => res.data),
 
-  // Get product statistics
-  getProductStats: async () => {
-    const response = await api.get('/products/stats');
-    return response.data;
-  },
-
-  // Get active products
-  getActiveProducts: async () => {
-    const response = await api.get('/products/active');
-    return response.data;
-  },
-
-  uploadCSV: async (formData) => {
-    const response = await api.post('/products/upload/csv', formData, {
+  // Excel export function
+  exportExcel: () => 
+    api.get('/api/products/export/excel', { 
+      responseType: 'blob',
       headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
-  },
-}; 
+        'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      }
+    }).then(response => {
+      // Create download link
+      const blob = new Blob([response.data], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+      link.download = `products-export-${timestamp}.xlsx`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      return { success: true, message: 'Excel file downloaded successfully' };
+    }),
+};
