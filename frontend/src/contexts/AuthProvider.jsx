@@ -1,6 +1,8 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import AuthContext from './authContext.js';
 import api from '../api/config';
+// useAuth hook moved to useAuth.js for best practices
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);

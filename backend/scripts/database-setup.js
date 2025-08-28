@@ -1,14 +1,7 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const { sequelize } = require('../config/database');
-const User = require('../models/User');
-const Product = require('../models/Product');
-const Customer = require('../models/Customer');
-const Transaction = require('../models/Transaction');
-const Loyalty = require('../models/Loyalty');
-const Hallmarking = require('../models/Hallmarking');
-const AuditLog = require('../models/AuditLog');
+const { User, Product, Customer, Transaction, Loyalty, Hallmarking, AuditLog } = require('../models');
 const logger = require('../utils/logger');
 const bcrypt = require('bcrypt');
 

@@ -1,5 +1,5 @@
 const { Product } = require('../models');
-const { Op } = require('sequelize');
+const { Op, col } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
 const ExcelJS = require('exceljs');
@@ -532,6 +532,47 @@ const uploadCSV = async (req, res) => {
   }
 };
 
+// Get low stock products
+const getLowStockProducts = async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+    const products = await Product.findAll({
+      where: {
+        stock_quantity: { [Op.lte]: col('reorder_level') },
+        reorder_level: { [Op.gt]: 0 }
+      },
+      order: [['stock_quantity', 'ASC']],
+      limit: parseInt(limit),
+    });
+    res.json({ success: true, products });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get real-time stats for products
+// @route   GET /api/products/realtime-stats
+// @access  Admin, Manager, Sales
+const getRealtimeStats = async (req, res) => {
+  try {
+    const lowStockCount = await Product.count({
+      where: {
+        stock_quantity: { [Op.lte]: col('reorder_level') },
+        reorder_level: { [Op.gt]: 0 }
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        lowStockAlerts: lowStockCount
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // ADD THIS NEW FUNCTION at the end of the file, BEFORE module.exports:
 const getAllTags = async (req, res) => {
   try {
@@ -738,5 +779,7 @@ module.exports = {
   exportCSV,
   uploadCSV,
   getAllTags,
-  exportExcel  // ADD THIS LINE
+  getLowStockProducts,
+  getRealtimeStats,
+  exportExcel
 };

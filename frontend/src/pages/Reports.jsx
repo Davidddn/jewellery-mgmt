@@ -16,10 +16,18 @@ import {
   CircularProgress,
   Alert,
   Button,
-  Select, MenuItem, InputLabel,
+  Select, 
+  MenuItem, 
+  InputLabel,
   FormControl,
+  useTheme,
+  useMediaQuery,
+  Card,
+  CardContent,
+  Stack,
+  Divider
 } from '@mui/material';
-import { Download, TableChart } from '@mui/icons-material';
+import { Download, TableChart, Assessment, TrendingUp } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { reportsAPI } from '../api/reports';
 import DownloadModal from '../components/DownloadModal'; // Import DownloadModal
@@ -62,6 +70,9 @@ function TabPanel(props) {
 }
 
 const Reports = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
   const [currentTab, setCurrentTab] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [downloadError, setDownloadError] = useState(null);
@@ -174,132 +185,464 @@ const Reports = () => {
   };
 
   return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h4" gutterBottom sx={{ mb: 0 }}>
-          Reports
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <FormControl sx={{ minWidth: 150 }}>
+    <Box sx={{ p: isMobile ? 1 : 0 }}>
+      {/* Header */}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: isMobile ? 'flex-start' : 'center', 
+        mb: 2,
+        flexDirection: isMobile ? 'column' : 'row',
+        gap: isMobile ? 2 : 0
+      }}>
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1,
+          mb: isMobile ? 1 : 0
+        }}>
+          <Assessment color="primary" sx={{ fontSize: isMobile ? 28 : 32 }} />
+          <Typography variant={isMobile ? "h5" : "h4"} sx={{ fontWeight: 'bold' }}>
+            Reports
+          </Typography>
+        </Box>
+        
+        <Stack 
+          direction={isMobile ? 'column' : 'row'} 
+          spacing={isMobile ? 1.5 : 2} 
+          sx={{ width: isMobile ? '100%' : 'auto' }}
+        >
+          <FormControl sx={{ minWidth: isMobile ? '100%' : 150 }}>
             <InputLabel>Download Format</InputLabel>
             <Select
               value={downloadFormat}
               onChange={(e) => setDownloadFormat(e.target.value)}
               label="Download Format"
+              size={isMobile ? "medium" : "medium"}
             >
               <MenuItem value="csv">CSV</MenuItem>
               <MenuItem value="pdf">PDF</MenuItem>
             </Select>
           </FormControl>
-          <Button variant="contained" startIcon={<Download />} onClick={() => setModalOpen(true)}>
+          <Button 
+            variant="contained" 
+            startIcon={<Download />} 
+            onClick={() => setModalOpen(true)}
+            fullWidth={isMobile}
+            size={isMobile ? "large" : "medium"}
+          >
             Download Report
           </Button>
-        </Box>
+        </Stack>
       </Box>
       
-      {downloadError && <Alert severity="error" onClose={() => setDownloadError(null)}>{downloadError}</Alert>}
+      {downloadError && (
+        <Alert 
+          severity="error" 
+          onClose={() => setDownloadError(null)}
+          sx={{ mb: 2 }}
+        >
+          {downloadError}
+        </Alert>
+      )}
 
-      <Paper>
-        <Tabs value={currentTab} onChange={handleTabChange}>
-          <Tab label="Sales Report" />
-          <Tab label="Inventory Report" />
-          <Tab label="Customer Analytics" />
+      <Paper 
+        elevation={isMobile ? 1 : 2}
+        sx={{ 
+          overflow: 'hidden',
+          borderRadius: isMobile ? 2 : 1
+        }}
+      >
+        <Tabs 
+          value={currentTab} 
+          onChange={handleTabChange}
+          variant={isMobile ? "scrollable" : "standard"}
+          scrollButtons={isMobile ? "auto" : false}
+          allowScrollButtonsMobile={isMobile}
+          sx={{
+            '& .MuiTab-root': {
+              fontSize: isMobile ? '0.875rem' : '0.9375rem',
+              minWidth: isMobile ? 120 : 'auto',
+              py: isMobile ? 1.5 : 1
+            }
+          }}
+        >
+          <Tab 
+            label="Sales Report" 
+            icon={<TrendingUp />} 
+            iconPosition={isMobile ? "top" : "start"}
+          />
+          <Tab 
+            label="Inventory Report" 
+            icon={<TableChart />} 
+            iconPosition={isMobile ? "top" : "start"}
+          />
+          <Tab 
+            label="Customer Analytics" 
+            icon={<Assessment />} 
+            iconPosition={isMobile ? "top" : "start"}
+          />
         </Tabs>
 
         {/* Sales Report Panel */}
         <TabPanel value={currentTab} index={0}>
-          <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
-            <FormControl sx={{ minWidth: 150 }}>
-              <InputLabel>Filter By</InputLabel>
-              <Select value={salesFilters.type} name="type" label="Filter By" onChange={handleSalesFilterChange}>
-                <MenuItem value="all">All Sales</MenuItem>
-                <MenuItem value="lowest">Lowest Sales</MenuItem>
-                <MenuItem value="date_range">Date Range</MenuItem>
-              </Select>
-            </FormControl>
-            {salesFilters.type === 'date_range' && (
-              <>
-                <TextField name="start_date" label="Start Date" type="date" value={salesFilters.start_date} onChange={handleSalesFilterChange} InputLabelProps={{ shrink: true }} />
-                <TextField name="end_date" label="End Date" type="date" value={salesFilters.end_date} onChange={handleSalesFilterChange} InputLabelProps={{ shrink: true }} />
-              </>
+          <Box sx={{ p: isMobile ? 2 : 3 }}>
+            {/* Filters */}
+            <Stack 
+              direction={isMobile ? 'column' : 'row'} 
+              spacing={2} 
+              sx={{ mb: 3 }}
+              alignItems={isMobile ? 'stretch' : 'center'}
+            >
+              <FormControl sx={{ minWidth: isMobile ? '100%' : 150 }}>
+                <InputLabel>Filter By</InputLabel>
+                <Select 
+                  value={salesFilters.type} 
+                  name="type" 
+                  label="Filter By" 
+                  onChange={handleSalesFilterChange}
+                  size={isMobile ? "medium" : "medium"}
+                >
+                  <MenuItem value="all">All Sales</MenuItem>
+                  <MenuItem value="lowest">Lowest Sales</MenuItem>
+                  <MenuItem value="date_range">Date Range</MenuItem>
+                </Select>
+              </FormControl>
+              {salesFilters.type === 'date_range' && (
+                <Stack direction={isMobile ? 'column' : 'row'} spacing={2} sx={{ width: isMobile ? '100%' : 'auto' }}>
+                  <TextField 
+                    name="start_date" 
+                    label="Start Date" 
+                    type="date" 
+                    value={salesFilters.start_date} 
+                    onChange={handleSalesFilterChange} 
+                    InputLabelProps={{ shrink: true }}
+                    size={isMobile ? "medium" : "medium"}
+                    sx={{ width: isMobile ? '100%' : 'auto' }}
+                  />
+                  <TextField 
+                    name="end_date" 
+                    label="End Date" 
+                    type="date" 
+                    value={salesFilters.end_date} 
+                    onChange={handleSalesFilterChange} 
+                    InputLabelProps={{ shrink: true }}
+                    size={isMobile ? "medium" : "medium"}
+                    sx={{ width: isMobile ? '100%' : 'auto' }}
+                  />
+                </Stack>
+              )}
+            </Stack>
+
+            {/* Loading and Error States */}
+            {isSalesLoading && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress />
+              </Box>
+            )}
+            
+            {salesError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                Failed to load sales data: {salesError.message}
+              </Alert>
+            )}
+
+            {/* Sales Data */}
+            {salesData && (
+              <Grid container spacing={isMobile ? 2 : 3}>
+                <Grid item xs={12}>
+                  <Card elevation={isMobile ? 1 : 2}>
+                    <CardContent>
+                      <Box sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 1, 
+                        mb: 2 
+                      }}>
+                        <TrendingUp color="primary" />
+                        <Typography variant="h6" sx={{ fontSize: isMobile ? '1.1rem' : '1.25rem' }}>
+                          Sales Overview
+                        </Typography>
+                      </Box>
+                      
+                      <Box sx={{ 
+                        height: isMobile ? 250 : 400,
+                        width: '100%',
+                        mt: 2
+                      }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart 
+                            data={salesData.report?.dailySales} 
+                            margin={{ 
+                              top: 5, 
+                              right: isMobile ? 10 : 30, 
+                              left: isMobile ? 10 : 50, 
+                              bottom: 5 
+                            }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis 
+                              dataKey="date" 
+                              fontSize={isMobile ? 10 : 12}
+                              tick={{ fontSize: isMobile ? 10 : 12 }}
+                            />
+                            <YAxis 
+                              tickFormatter={formatCurrency}
+                              fontSize={isMobile ? 10 : 12}
+                              tick={{ fontSize: isMobile ? 10 : 12 }}
+                            >
+                              {!isMobile && (
+                                <Label 
+                                  value="Total Sales (₹)" 
+                                  angle={-90} 
+                                  position="insideLeft" 
+                                  style={{ textAnchor: 'middle' }} 
+                                />
+                              )}
+                            </YAxis>
+                            <Tooltip 
+                              formatter={(value) => formatCurrency(value)}
+                              labelStyle={{ fontSize: isMobile ? '0.8rem' : '0.875rem' }}
+                              contentStyle={{ fontSize: isMobile ? '0.8rem' : '0.875rem' }}
+                            />
+                            <Legend />
+                            <Line type="monotone" dataKey="total_sales" stroke="#8884d8" activeDot={{ r: 8 }} name="Total Sales" />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                
+                <Grid item xs={12}>
+                  <Card elevation={isMobile ? 1 : 2}>
+                    <CardContent>
+                      <Typography variant="h6" sx={{ mb: 2, fontSize: isMobile ? '1.1rem' : '1.25rem' }}>
+                        Sales Details
+                      </Typography>
+                      <Box sx={{ 
+                        overflowX: 'auto',
+                        '& .MuiTableContainer-root': {
+                          borderRadius: 1
+                        }
+                      }}>
+                        <TableContainer component={Paper} sx={{ 
+                          mt: 2, 
+                          maxHeight: isMobile ? 300 : 400,
+                          minWidth: { xs: 500, md: 'auto' }
+                        }}>
+                          <Table stickyHeader>
+                            <TableHead>
+                              <TableRow>
+                                <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                  Date
+                                </TableCell>
+                                <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                  Product Name
+                                </TableCell>
+                                <TableCell align="right" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                  Quantity
+                                </TableCell>
+                                <TableCell align="right" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                  Amount
+                                </TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {salesData.report?.sales && salesData.report.sales.map((item, index) => (
+                                <TableRow key={index}>
+                                  <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                    {new Date(item.date).toLocaleDateString()}
+                                  </TableCell>
+                                  <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                    <Typography variant="body2" noWrap sx={{ 
+                                      maxWidth: { xs: '120px', md: '200px' },
+                                      fontSize: { xs: '0.75rem', md: '0.875rem' }
+                                    }}>
+                                      {item.productName}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell align="right" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                    {item.totalQuantity}
+                                  </TableCell>
+                                  <TableCell align="right" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                    {formatCurrency(item.totalAmount)}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
             )}
           </Box>
-          {isSalesLoading && <CircularProgress />}
-          {salesError && <Alert severity="error">Failed to load sales data: {salesError.message}</Alert>}
-          {salesData && (
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <Typography variant="h6">Sales Overview</Typography>
-                <Paper sx={{ p: 2, mt: 2, height: { xs: 300, md: 500 },width: { xs: 300, md: 1150 } }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={salesData.report?.dailySales} margin={{ top: 5, right: 30, left: 50, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis tickFormatter={formatCurrency}>
-                        <Label value="Total Sales (₹)" angle={-90} position="insideLeft" style={{ textAnchor: 'middle' }} />
-                      </YAxis>
-                      <Tooltip formatter={(value) => formatCurrency(value)} />
-                      <Legend />
-                      <Line type="monotone" dataKey="total_sales" stroke="#8884d8" activeDot={{ r: 8 }} name="Total Sales" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </Paper>
-              </Grid>
-              <Grid item xs={12}>
-                <Typography variant="h6" sx={{ mt: 4 }}>Sales Details</Typography>
-                <TableContainer component={Paper} sx={{ mt: 2 }}>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Date</TableCell>
-                        <TableCell>Product Name</TableCell>
-                        <TableCell align="right">Quantity</TableCell>
-                        <TableCell align="right">Amount</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {salesData.report?.sales && salesData.report.sales.map((item, index) => (
-                        <TableRow key={index}>
-                          <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
-                          <TableCell>{item.productName}</TableCell>
-                          <TableCell align="right">{item.totalQuantity}</TableCell>
-                          <TableCell align="right">{formatCurrency(item.totalAmount)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Grid>
-            </Grid>
-          )}
         </TabPanel>
 
         {/* Inventory Report Panel */}
         <TabPanel value={currentTab} index={1}>
-           <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
-            <FormControl sx={{ minWidth: 150 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 2, 
+            mb: 3, 
+            flexWrap: 'wrap', 
+            alignItems: 'center',
+            flexDirection: { xs: 'column', sm: 'row' }
+          }}>
+            <FormControl sx={{ minWidth: { xs: '100%', sm: 150 } }}>
               <InputLabel>Filter By</InputLabel>
-              <Select value={inventoryFilters.type} name="type" label="Filter By" onChange={handleInventoryFilterChange}>
+              <Select 
+                value={inventoryFilters.type} 
+                name="type" 
+                label="Filter By" 
+                onChange={handleInventoryFilterChange}
+                size={isMobile ? "medium" : "medium"}
+              >
                 <MenuItem value="all">All Inventory</MenuItem>
                 <MenuItem value="low_stock">Low Stock</MenuItem>
                 <MenuItem value="category">By Category</MenuItem>
               </Select>
             </FormControl>
             {inventoryFilters.type === 'category' && (
-              <TextField name="category" label="Category Name" value={inventoryFilters.category} onChange={handleInventoryFilterChange} />
+              <TextField 
+                name="category" 
+                label="Category Name" 
+                value={inventoryFilters.category} 
+                onChange={handleInventoryFilterChange}
+                size={isMobile ? "medium" : "medium"}
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
+              />
             )}
           </Box>
-          {isInventoryLoading && <CircularProgress />}
-          {inventoryError && <Alert severity="error">Failed to load inventory data: {inventoryError.message}</Alert>}
+          
+          {isInventoryLoading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          )}
+          
+          {inventoryError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              Failed to load inventory data: {inventoryError.message}
+            </Alert>
+          )}
+          
           {inventoryData && (
-            <Grid container spacing={3}>
-              <Grid size={{ xs: 12 }}>
-                <Typography variant="h6">Stock by Category</Typography>
-                <Paper sx={{ p: 2, mt: 2, height: { xs: 300, md: 500 }, width: { xs: 300, md: 1150 } }}><ResponsiveContainer width="100%" height="100%"><BarChart data={inventoryData.report?.categoryBreakdown} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="category" /><YAxis><Label value="Total Stock" angle={-90} position="insideLeft" style={{ textAnchor: 'middle' }} /></YAxis><Tooltip /><Legend /><Bar dataKey="totalStock" fill="#82ca9d" name="Total Stock" /></BarChart></ResponsiveContainer></Paper>
+            <Grid container spacing={isMobile ? 2 : 3}>
+              <Grid item xs={12}>
+                <Card elevation={isMobile ? 1 : 2}>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ mb: 2, fontSize: isMobile ? '1.1rem' : '1.25rem' }}>
+                      Stock by Category
+                    </Typography>
+                    <Box sx={{ 
+                      height: isMobile ? 250 : 400,
+                      width: '100%',
+                      mt: 2
+                    }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart 
+                          data={inventoryData.report?.categoryBreakdown} 
+                          margin={{ 
+                            top: 5, 
+                            right: isMobile ? 10 : 30, 
+                            left: isMobile ? 10 : 20, 
+                            bottom: 5 
+                          }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis 
+                            dataKey="category" 
+                            fontSize={isMobile ? 10 : 12}
+                            tick={{ fontSize: isMobile ? 10 : 12 }}
+                          />
+                          <YAxis 
+                            fontSize={isMobile ? 10 : 12}
+                            tick={{ fontSize: isMobile ? 10 : 12 }}
+                          >
+                            {!isMobile && (
+                              <Label 
+                                value="Total Stock" 
+                                angle={-90} 
+                                position="insideLeft" 
+                                style={{ textAnchor: 'middle' }} 
+                              />
+                            )}
+                          </YAxis>
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey="totalStock" fill="#82ca9d" name="Total Stock" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </Box>
+                  </CardContent>
+                </Card>
               </Grid>
-              <Grid size={{ xs: 12 }}>
-                <Typography variant="h6" sx={{ mt: 4 }}>Products</Typography>
-                <TableContainer component={Paper} sx={{ mt: 2 }}><Table stickyHeader><TableHead><TableRow><TableCell>Product</TableCell><TableCell>Category</TableCell><TableCell align="right">Stock</TableCell><TableCell align="right">Price</TableCell></TableRow></TableHead><TableBody>{inventoryData.report?.products && inventoryData.report.products.map((product) => (<TableRow key={product.id}><TableCell>{product.name}</TableCell><TableCell>{product.category}</TableCell><TableCell align="right">{product.stock_quantity}</TableCell><TableCell align="right">{formatCurrency(product.selling_price)}</TableCell></TableRow>))}</TableBody></Table></TableContainer>
+              
+              <Grid item xs={12}>
+                <Card elevation={isMobile ? 1 : 2}>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ mt: 2, mb: 2, fontSize: isMobile ? '1.1rem' : '1.25rem' }}>
+                      Products
+                    </Typography>
+                    <Box sx={{ 
+                      overflowX: 'auto',
+                      '& .MuiTableContainer-root': {
+                        borderRadius: 1
+                      }
+                    }}>
+                      <TableContainer component={Paper} sx={{ 
+                        mt: 2,
+                        minWidth: { xs: 500, md: 'auto' }
+                      }}>
+                        <Table stickyHeader>
+                          <TableHead>
+                            <TableRow>
+                              <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                Product
+                              </TableCell>
+                              <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                Category
+                              </TableCell>
+                              <TableCell align="right" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                Stock
+                              </TableCell>
+                              <TableCell align="right" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                Price
+                              </TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {inventoryData.report?.products && inventoryData.report.products.map((product) => (
+                              <TableRow key={product.id}>
+                                <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                  <Typography variant="body2" noWrap sx={{ 
+                                    maxWidth: { xs: '120px', md: '200px' },
+                                    fontSize: { xs: '0.75rem', md: '0.875rem' }
+                                  }}>
+                                    {product.name}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                  {product.category}
+                                </TableCell>
+                                <TableCell align="right" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                  {product.stock_quantity}
+                                </TableCell>
+                                <TableCell align="right" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                  {formatCurrency(product.selling_price)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Box>
+                  </CardContent>
+                </Card>
               </Grid>
             </Grid>
           )}
@@ -307,10 +650,23 @@ const Reports = () => {
 
         {/* Customer Analytics Panel */}
         <TabPanel value={currentTab} index={2}>
-          <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
-            <FormControl sx={{ minWidth: 180 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 2, 
+            mb: 3, 
+            flexWrap: 'wrap', 
+            alignItems: 'center',
+            flexDirection: { xs: 'column', sm: 'row' }
+          }}>
+            <FormControl sx={{ minWidth: { xs: '100%', sm: 180 } }}>
               <InputLabel>Filter By</InputLabel>
-              <Select value={customerFilters.type} name="type" label="Filter By" onChange={handleCustomerFilterChange}>
+              <Select 
+                value={customerFilters.type} 
+                name="type" 
+                label="Filter By" 
+                onChange={handleCustomerFilterChange}
+                size={isMobile ? "medium" : "medium"}
+              >
                 <MenuItem value="all">All Customers</MenuItem>
                 <MenuItem value="most_purchases">Top Customers</MenuItem>
                 <MenuItem value="date">By Join Date</MenuItem>
@@ -318,22 +674,121 @@ const Reports = () => {
               </Select>
             </FormControl>
             {customerFilters.type === 'date' && (
-              <>
-                <TextField name="start_date" label="Start Date" type="date" value={customerFilters.start_date} onChange={handleCustomerFilterChange} InputLabelProps={{ shrink: true }} />
-                <TextField name="end_date" label="End Date" type="date" value={customerFilters.end_date} onChange={handleCustomerFilterChange} InputLabelProps={{ shrink: true }} />
-              </>
+              <Stack direction={isMobile ? 'column' : 'row'} spacing={2} sx={{ width: { xs: '100%', sm: 'auto' } }}>
+                <TextField 
+                  name="start_date" 
+                  label="Start Date" 
+                  type="date" 
+                  value={customerFilters.start_date} 
+                  onChange={handleCustomerFilterChange} 
+                  InputLabelProps={{ shrink: true }}
+                  size={isMobile ? "medium" : "medium"}
+                  sx={{ width: { xs: '100%', sm: 'auto' } }}
+                />
+                <TextField 
+                  name="end_date" 
+                  label="End Date" 
+                  type="date" 
+                  value={customerFilters.end_date} 
+                  onChange={handleCustomerFilterChange} 
+                  InputLabelProps={{ shrink: true }}
+                  size={isMobile ? "medium" : "medium"}
+                  sx={{ width: { xs: '100%', sm: 'auto' } }}
+                />
+              </Stack>
             )}
             {customerFilters.type === 'name' && (
-              <TextField name="name" label="Customer Name" value={customerFilters.name} onChange={handleCustomerFilterChange} />
+              <TextField 
+                name="name" 
+                label="Customer Name" 
+                value={customerFilters.name} 
+                onChange={handleCustomerFilterChange}
+                size={isMobile ? "medium" : "medium"}
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
+              />
             )}
           </Box>
-          {isCustomerLoading && <CircularProgress />}
-          {customerError && <Alert severity="error">Failed to load customer data: {customerError.message}</Alert>}
+          
+          {isCustomerLoading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          )}
+          
+          {customerError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              Failed to load customer data: {customerError.message}
+            </Alert>
+          )}
+          
           {customerData && (
-            <Grid container spacing={3}>
-              <Grid size={{ xs: 12 }}>
-                <Typography variant="h6">Customers</Typography>
-                <TableContainer component={Paper} sx={{ mt: 2 }}><Table><TableHead><TableRow><TableCell>Customer Name</TableCell><TableCell>Email</TableCell><TableCell>Phone</TableCell><TableCell align="right">Total Spent</TableCell></TableRow></TableHead><TableBody>{customerData.analytics?.customers && customerData.analytics.customers.map((customer) => (<TableRow key={customer.id}><TableCell>{customer.name}</TableCell><TableCell>{customer.email}</TableCell><TableCell>{customer.phone}</TableCell><TableCell align="right">{formatCurrency(customer.total_spent)}</TableCell></TableRow>))}</TableBody></Table></TableContainer>
+            <Grid container spacing={isMobile ? 2 : 3}>
+              <Grid item xs={12}>
+                <Card elevation={isMobile ? 1 : 2}>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ mb: 2, fontSize: isMobile ? '1.1rem' : '1.25rem' }}>
+                      Customers
+                    </Typography>
+                    <Box sx={{ 
+                      overflowX: 'auto',
+                      '& .MuiTableContainer-root': {
+                        borderRadius: 1
+                      }
+                    }}>
+                      <TableContainer component={Paper} sx={{ 
+                        mt: 2,
+                        minWidth: { xs: 600, md: 'auto' }
+                      }}>
+                        <Table stickyHeader>
+                          <TableHead>
+                            <TableRow>
+                              <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                Customer Name
+                              </TableCell>
+                              <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                Email
+                              </TableCell>
+                              <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                Phone
+                              </TableCell>
+                              <TableCell align="right" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                Total Spent
+                              </TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {customerData.analytics?.customers && customerData.analytics.customers.map((customer) => (
+                              <TableRow key={customer.id}>
+                                <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                  <Typography variant="body2" noWrap sx={{ 
+                                    maxWidth: { xs: '120px', md: '200px' },
+                                    fontSize: { xs: '0.75rem', md: '0.875rem' }
+                                  }}>
+                                    {customer.name}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                  <Typography variant="body2" noWrap sx={{ 
+                                    maxWidth: { xs: '150px', md: '250px' },
+                                    fontSize: { xs: '0.75rem', md: '0.875rem' }
+                                  }}>
+                                    {customer.email}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                  {customer.phone}
+                                </TableCell>
+                                <TableCell align="right" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                  {formatCurrency(customer.total_spent)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Box>
+                  </CardContent>
+                </Card>
               </Grid>
             </Grid>
           )}

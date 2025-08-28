@@ -18,21 +18,24 @@ const logger = require('./utils/logger');
 const { User } = require('./models');
 const path = require('path');
 
+
 // Import your route files
- const auditLogsRoutes = require('./routes/auditLogs');
- const authRoutes = require('./routes/auth');
- const customersRoutes = require('./routes/customers');
- const goldRateRoutes = require('./routes/goldRate');
- const hallmarkingRoutes = require('./routes/hallmarking');
- const inventoryRoutes = require('./routes/inventory');
- const loyaltyRoutes = require('./routes/loyalty');
- const productRoutes = require('./routes/products');
- const reportingRoutes = require('./routes/reporting');
- const transactionsRoutes = require('./routes/transactions');
- const userRoutes = require('./routes/users');
- const settingsRoutes = require('./routes/settings');
- const importsRoutes = require('./routes/imports');
+const auditLogsRoutes = require('./routes/auditLogs');
+const authRoutes = require('./routes/auth');
+const customersRoutes = require('./routes/customers');
+const goldRateRoutes = require('./routes/goldRate');
+const hallmarkingRoutes = require('./routes/hallmarking');
+const inventoryRoutes = require('./routes/inventory');
+const loyaltyRoutes = require('./routes/loyalty');
+const productRoutes = require('./routes/products');
+const reportingRoutes = require('./routes/reporting');
+const transactionsRoutes = require('./routes/transactions');
+const userRoutes = require('./routes/users');
+const settingsRoutes = require('./routes/settings');
+const importsRoutes = require('./routes/imports');
 const invoiceRoutes = require('./routes/invoices');
+const pushRoutes = require('./routes/push');
+
 
 const initializeDatabase = async (User) => {
     // Test database connection
@@ -87,7 +90,8 @@ const startServer = async () => {
       ]
     }));
 
-    // Middleware
+
+    // Middleware (move JSON parsing before all routes)
     app.use(helmet({
         crossOriginEmbedderPolicy: false, // Allow CORS
         crossOriginResourcePolicy: { policy: "cross-origin" }
@@ -95,6 +99,8 @@ const startServer = async () => {
     app.use(express.json({ limit: '10mb' }));
     app.use(express.urlencoded({ extended: true }));
     app.use(morgan('dev'));
+
+    app.use('/api/push', pushRoutes);
 
     // Serve static files from the 'uploads' directory
     app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -109,6 +115,7 @@ const startServer = async () => {
     app.use('/api/auth', authRoutes);
     app.use('/api/users', userRoutes);
     app.use('/api/products', productRoutes);
+    app.use('/api/categories', require('./routes/categories'));
     app.use('/api/reports', reportingRoutes);
     app.use('/api/customers', customersRoutes);
     app.use('/api/hallmarking', hallmarkingRoutes);
@@ -118,6 +125,7 @@ const startServer = async () => {
     app.use('/api/settings', settingsRoutes);
     app.use('/api/imports', importsRoutes);
     app.use('/api/invoices', invoiceRoutes);
+    app.use('/api/invoice-template', require('./routes/invoiceTemplate'));
 
     // 404 Not Found Handler
     app.use((req, res, next) => {

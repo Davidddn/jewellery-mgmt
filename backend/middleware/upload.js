@@ -5,23 +5,27 @@ const path = require('path');
 const storage = multer.diskStorage({
     destination: './uploads/', // Make sure this directory exists or is created
     filename: function(req, file, cb){
-        cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+        if (file.fieldname === 'logo') {
+            cb(null, 'logo.jpg');
+        } else {
+            cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+        }
     }
 });
 
 // Check file type
 function checkFileType(file, cb){
     // Allowed ext
-    const filetypes = /jpeg|jpg|png|gif|csv/;
+    const filetypes = /jpeg|jpg|png|gif|csv|xlsx/;
     // Check ext
     const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
     // Check mime
-    const mimetype = filetypes.test(file.mimetype);
+    const mimetype = filetypes.test(file.mimetype) || file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
     if(mimetype && extname){
         return cb(null, true);
     } else {
-        cb('Error: Images and CSVs Only!');
+        cb('Error: Images, CSVs, and XLSX files Only!');
     }
 }
 

@@ -1,5 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import ProtectedRoute from "../components/ProtectedRoute";
+import InvoiceDesigner from '../pages/InvoiceDesigner';
 import Layout from "../components/Layout/Layout";
 import Login from "../pages/Login";
 import Dashboard from "../pages/Dashboard";
@@ -13,7 +14,11 @@ import AdminRoutes from "./AdminRoutes";
 import Sales from "../pages/Sales";
 import ImportData from "../pages/ImportData";
 import GoldRate from "../pages/GoldRate";
+import AdvancedAnalytics from "../pages/AdvancedAnalytics";
+import RealTimeDashboard from "../pages/RealTimeDashboard";
 
+// TODO: Replace with real premium check
+const isPremium = true;
 const AppRoutes = () => {
   return (
     <Routes>
@@ -36,6 +41,12 @@ const AppRoutes = () => {
           <Route path="/sales" element={<Sales />} />
           <Route path="/import" element={<ImportData />} />
           <Route path="/gold-rate" element={<GoldRate />} />
+          <Route path="/analytics" element={<AdvancedAnalytics />} />
+          <Route path="/realtime" element={<RealTimeDashboard />} />
+          {/* Premium: Invoice Designer */}
+          {isPremium && (
+            <Route path="/invoice-designer" element={<InvoiceDesigner />} />
+          )}
           
           <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
             <Route path="/admin/*" element={<AdminRoutes />} />

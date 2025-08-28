@@ -9,7 +9,7 @@ export const authAPI = {
    * @returns {Promise<object>} The response data, including user and token.
    */
   login: async (credentials) => {
-    const response = await api.post('/auth/login', credentials);
+  const response = await api.post('/api/auth/login', credentials);
     return response.data;
   },
 

@@ -17,7 +17,16 @@ import {
   DialogActions,
   CircularProgress,
   Menu,
-  MenuItem
+  MenuItem,
+  useTheme,
+  useMediaQuery,
+  Card,
+  CardContent,
+  Fab,
+  AppBar,
+  Toolbar,
+  Slide,
+  Stack
 } from '@mui/material';
 import { 
   AddShoppingCart, 
@@ -25,13 +34,23 @@ import {
   Print, 
   Preview, 
   Download,
-  MoreVert
+  MoreVert,
+  Add,
+  Remove,
+  ShoppingCart,
+  Person,
+  QrCodeScanner
 } from '@mui/icons-material';
 import { productsAPI } from '../api/products';
+import { useQueryClient } from '@tanstack/react-query';
 import { transactionsAPI } from '../api/transactions';
 import { customersAPI } from '../api/customers';
 
 const Sales = () => {
+  const queryClient = useQueryClient();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
   const [barcode, setBarcode] = useState('');
   const [scannedProduct, setScannedProduct] = useState(null);
   const [cart, setCart] = useState([]);
@@ -58,9 +77,9 @@ const Sales = () => {
   });
 
   // Loading and menu states
-  const [downloadingId, setDownloadingId] = useState(null);
-  const [lastTransactionId, setLastTransactionId] = useState(null);
-  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
+  const [, setDownloadingId] = useState(null);
+  const [, setLastTransactionId] = useState(null);  
+  // const [, setMenuAnchorEl] = useState(null); // Unused, commented out
 
   // Refs for debouncing
   const customerTimeoutRef = useRef(null);
@@ -400,6 +419,11 @@ const Sales = () => {
         handleClearCart();
         handleClearCustomer();
         await handlePrintBill(response.transaction.id);
+        // Invalidate analytics queries so dashboard updates
+        queryClient.invalidateQueries(['advancedSales']);
+        queryClient.invalidateQueries(['products']);
+        queryClient.invalidateQueries(['transactions']);
+        queryClient.invalidateQueries(['customers']);
       } else {
         alert(response.message || 'Failed to create transaction.');
       }
@@ -480,6 +504,9 @@ const Sales = () => {
     }
   };
 
+  // Preview and download invoice functions (currently unused)
+  // These functions are preserved for future invoice management features
+  /*
   const handlePreviewInvoice = async (transactionId) => {
     try {
       setDownloadingId(transactionId);
@@ -576,6 +603,7 @@ const Sales = () => {
       setDownloadingId(null);
     }
   };
+  */
 
   const handleCreateSimpleBill = async (transactionId) => {
     try {
@@ -841,7 +869,8 @@ const Sales = () => {
     `;
   };
 
-  // Menu handlers
+  // Menu handlers (currently unused but may be needed for future features)
+  /*
   const handleMenuOpen = (event) => {
     setMenuAnchorEl(event.currentTarget);
   };
@@ -849,16 +878,63 @@ const Sales = () => {
   const handleMenuClose = () => {
     setMenuAnchorEl(null);
   };
+  */  return (
+    <Box sx={{ 
+      p: isMobile ? 1 : 3,
+      pb: isMobile ? 10 : 3, // Extra padding for mobile FAB
+      minHeight: '100vh',
+      backgroundColor: isMobile ? theme.palette.background.default : 'transparent'
+    }}>
+      {/* Header */}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        mb: isMobile ? 2 : 3,
+        flexDirection: isMobile ? 'column' : 'row',
+        gap: isMobile ? 1 : 0
+      }}>
+        <Typography variant={isMobile ? "h5" : "h4"} sx={{ fontWeight: 'bold' }}>
+          Sales Point
+        </Typography>
+        {isMobile && cart.length > 0 && (
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            backgroundColor: theme.palette.primary.main,
+            color: theme.palette.primary.contrastText,
+            px: 2,
+            py: 1,
+            borderRadius: 2,
+            fontWeight: 'bold'
+          }}>
+            <ShoppingCart sx={{ mr: 1, fontSize: 18 }} />
+            Total: ₹{totalAmount.toFixed(2)}
+          </Box>
+        )}
+      </Box>
 
-  return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>Sales Point</Typography>
-
-      <Grid container spacing={3}>
+      <Grid container spacing={isMobile ? 2 : 3}>
         {/* Customer Section */}
         <Grid item xs={12} md={6}>
-          <Paper elevation={2} sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>Customer Details</Typography>
+          <Paper 
+            elevation={isMobile ? 1 : 2} 
+            sx={{ 
+              p: isMobile ? 2 : 2,
+              height: isMobile ? 'auto' : 'fit-content'
+            }}
+          >
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              mb: 2,
+              gap: 1
+            }}>
+              <Person color="primary" />
+              <Typography variant="h6" sx={{ fontSize: isMobile ? '1.1rem' : '1.25rem' }}>
+                Customer Details
+              </Typography>
+            </Box>
             <TextField
               fullWidth
               label="Customer Phone / Name"
@@ -866,24 +942,45 @@ const Sales = () => {
               onChange={handleCustomerInputChange}
               onKeyPress={handleCustomerLookupKeyPress}
               margin="normal"
+              size={isMobile ? "medium" : "medium"}
               helperText={isSearchingCustomer ? "Searching..." : "Start typing to search customers"}
               disabled={!!customer}
+              sx={{
+                '& .MuiInputBase-root': {
+                  fontSize: isMobile ? '1rem' : '1rem'
+                }
+              }}
             />
             
             {/* Customer search results dropdown */}
             {showInlineCustomerResults && customerSearchResults.length > 0 && !customer && (
-              <Paper elevation={3} sx={{ mt: 1, maxHeight: 200, overflow: 'auto', position: 'relative', zIndex: 2 }}>
-                <List dense>
+              <Paper elevation={3} sx={{ 
+                mt: 1, 
+                maxHeight: isMobile ? 150 : 200, 
+                overflow: 'auto', 
+                position: 'relative', 
+                zIndex: 2 
+              }}>
+                <List dense={!isMobile}>
                   {customerSearchResults.map((cust) => (
                     <ListItem 
                       button 
                       key={cust.id} 
                       onClick={() => handleSelectCustomer(cust)}
-                      sx={{ '&:hover': { backgroundColor: 'action.hover' } }}
+                      sx={{ 
+                        '&:hover': { backgroundColor: 'action.hover' },
+                        py: isMobile ? 1.5 : 1
+                      }}
                     >
                       <ListItemText 
                         primary={cust.name} 
-                        secondary={`Phone: ${cust.phone}${cust.email ? `, Email: ${cust.email}` : ''}`} 
+                        secondary={`Phone: ${cust.phone}${cust.email ? `, Email: ${cust.email}` : ''}`}
+                        primaryTypographyProps={{ 
+                          fontSize: isMobile ? '1rem' : '0.875rem' 
+                        }}
+                        secondaryTypographyProps={{ 
+                          fontSize: isMobile ? '0.875rem' : '0.75rem' 
+                        }}
                       />
                     </ListItem>
                   ))}
@@ -894,8 +991,16 @@ const Sales = () => {
             {/* No customer found message */}
             {showNoCustomerFoundMessage && !customer && !isSearchingCustomer && (
               <Box sx={{ mt: 2 }}>
-                <Typography color="error">No customer found.</Typography>
-                <Button variant="outlined" onClick={() => setShowNewCustomerForm(true)} sx={{ mt: 1 }}>
+                <Typography color="error" sx={{ fontSize: isMobile ? '0.9rem' : '0.875rem' }}>
+                  No customer found.
+                </Typography>
+                <Button 
+                  variant="outlined" 
+                  onClick={() => setShowNewCustomerForm(true)} 
+                  sx={{ mt: 1 }}
+                  size={isMobile ? "medium" : "small"}
+                  fullWidth={isMobile}
+                >
                   Add New Customer
                 </Button>
               </Box>
@@ -903,27 +1008,64 @@ const Sales = () => {
 
             {/* Selected customer details */}
             {customer && (
-              <Box sx={{ mt: 2, p: 2, backgroundColor: 'success.light', borderRadius: 1 }}>
-                <Typography><strong>Name:</strong> {customer.name}</Typography>
-                <Typography><strong>Phone:</strong> {customer.phone}</Typography>
-                <Typography><strong>Email:</strong> {customer.email || 'N/A'}</Typography>
-                <Button 
-                  variant="outlined" 
-                  size="small" 
-                  onClick={handleClearCustomer}
-                  sx={{ mt: 1 }}
-                >
-                  Change Customer
-                </Button>
-              </Box>
+              <Card sx={{ 
+                mt: 2, 
+                backgroundColor: 'success.light', 
+                border: '1px solid',
+                borderColor: 'success.main'
+              }}>
+                <CardContent sx={{ p: isMobile ? 2 : 2, '&:last-child': { pb: 2 } }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, color: 'success.dark' }}>
+                    Selected Customer
+                  </Typography>
+                  <Stack spacing={0.5}>
+                    <Typography variant="body2">
+                      <strong>Name:</strong> {customer.name}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Phone:</strong> {customer.phone}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Email:</strong> {customer.email || 'N/A'}
+                    </Typography>
+                  </Stack>
+                  <Button 
+                    variant="outlined" 
+                    size="small" 
+                    onClick={handleClearCustomer}
+                    sx={{ mt: 1.5 }}
+                    fullWidth={isMobile}
+                    color="success"
+                  >
+                    Change Customer
+                  </Button>
+                </CardContent>
+              </Card>
             )}
           </Paper>
         </Grid>
 
         {/* Product Scan Section */}
         <Grid item xs={12} md={6}>
-          <Paper elevation={2} sx={{ p: 2, position: 'relative' }}>
-            <Typography variant="h6" gutterBottom>Scan Product</Typography>
+          <Paper 
+            elevation={isMobile ? 1 : 2} 
+            sx={{ 
+              p: isMobile ? 2 : 2, 
+              position: 'relative',
+              height: isMobile ? 'auto' : 'fit-content'
+            }}
+          >
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              mb: 2,
+              gap: 1
+            }}>
+              <QrCodeScanner color="primary" />
+              <Typography variant="h6" sx={{ fontSize: isMobile ? '1.1rem' : '1.25rem' }}>
+                Scan Product
+              </Typography>
+            </Box>
             <TextField
               fullWidth
               label="Barcode / SKU / Product Name"
@@ -931,35 +1073,54 @@ const Sales = () => {
               onChange={handleBarcodeChange}
               onKeyPress={handleScanProduct}
               margin="normal"
-              autoFocus={!!customer}
+              size={isMobile ? "medium" : "medium"}
+              autoFocus={!!customer && !isMobile}
               helperText={isSearchingProduct ? "Searching..." : "Start typing to search products or press Enter"}
+              sx={{
+                '& .MuiInputBase-root': {
+                  fontSize: isMobile ? '1rem' : '1rem'
+                }
+              }}
             />
 
             {/* Product search results dropdown */}
             {showInlineProductResults && productSearchResults.length > 0 && (
-              <Paper elevation={3} sx={{ mt: 1, maxHeight: 250, overflow: 'auto', position: 'absolute', left: 16, right: 16, zIndex: 1 }}>
-                <List dense>
+              <Paper elevation={3} sx={{ 
+                mt: 1, 
+                maxHeight: isMobile ? 200 : 250, 
+                overflow: 'auto', 
+                position: 'absolute', 
+                left: isMobile ? 8 : 16, 
+                right: isMobile ? 8 : 16, 
+                zIndex: 1 
+              }}>
+                <List dense={!isMobile}>
                   {productSearchResults.map((product) => (
                     <ListItem 
                       button 
                       key={product.id} 
                       onClick={() => handleSelectProduct(product)}
-                      sx={{ '&:hover': { backgroundColor: 'action.hover' } }}
+                      sx={{ 
+                        '&:hover': { backgroundColor: 'action.hover' },
+                        py: isMobile ? 1.5 : 1
+                      }}
                     >
                       <ListItemText 
                         primary={product.name}
-                        secondary={
-                          <Box>
-                            <Typography variant="body2">
+                        secondary={                          <>
+                            <Typography component="span" variant="body2" sx={{ fontSize: isMobile ? '0.875rem' : '0.75rem' }}>
                               Price: ₹{product.selling_price} | Stock: {product.stock_quantity}
                             </Typography>
-                            <Typography variant="caption" color="textSecondary">
+                            <br />
+                            <Typography component="span" variant="caption" color="textSecondary" sx={{ fontSize: isMobile ? '0.75rem' : '0.7rem' }}>
                               {product.barcode && `Barcode: ${product.barcode}`}
                               {product.barcode && product.sku && ' | '}
                               {product.sku && `SKU: ${product.sku}`}
                             </Typography>
-                          </Box>
-                        }
+                          </>}
+                        primaryTypographyProps={{ 
+                          fontSize: isMobile ? '1rem' : '0.875rem' 
+                        }}
                       />
                     </ListItem>
                   ))}
@@ -970,164 +1131,313 @@ const Sales = () => {
             {/* No product found message */}
             {showNoProductFoundMessage && !scannedProduct && !isSearchingProduct && (
               <Box sx={{ mt: 2 }}>
-                <Typography color="error">No product found.</Typography>
+                <Typography color="error" sx={{ fontSize: isMobile ? '0.9rem' : '0.875rem' }}>
+                  No product found.
+                </Typography>
               </Box>
             )}
 
             {/* Scanned product details */}
             {scannedProduct && (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="h6">{scannedProduct.name}</Typography>
-                <Typography>Price: ₹{scannedProduct.selling_price}</Typography>
-                <Typography>Stock: {scannedProduct.stock_quantity}</Typography>
-                {scannedProduct.barcode && (
-                  <Typography variant="body2">Barcode: {scannedProduct.barcode}</Typography>
-                )}
-                {scannedProduct.sku && (
-                  <Typography variant="body2">SKU: {scannedProduct.sku}</Typography>
-                )}
-                <TextField
-                  type="number"
-                  label="Quantity"
-                  value={scannedProduct.quantity}
-                  onChange={(e) => setScannedProduct({
-                    ...scannedProduct, 
-                    quantity: Math.max(1, parseInt(e.target.value) || 1)
-                  })}
-                  inputProps={{ min: 1 }}
-                  size="small"
-                  sx={{ mt: 1, width: '100px' }}
-                />
-                <br />
-                <Button
-                  variant="contained"
-                  startIcon={<AddShoppingCart />}
-                  onClick={handleAddToCart}
-                  sx={{ mt: 2 }}
-                >
-                  Add to Cart
-                </Button>
-              </Box>
+              <Card sx={{ mt: 2, backgroundColor: 'info.light', border: '1px solid', borderColor: 'info.main' }}>
+                <CardContent sx={{ p: isMobile ? 2 : 2, '&:last-child': { pb: 2 } }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, color: 'info.dark' }}>
+                    Selected Product
+                  </Typography>
+                  <Typography variant={isMobile ? "h6" : "h6"} sx={{ mb: 1 }}>
+                    {scannedProduct.name}
+                  </Typography>
+                  <Stack spacing={0.5} sx={{ mb: 2 }}>
+                    <Typography variant="body2">
+                      <strong>Price:</strong> ₹{scannedProduct.selling_price}
+                    </Typography>
+                    <Typography variant="body2">
+                      <strong>Stock:</strong> {scannedProduct.stock_quantity}
+                    </Typography>
+                    {scannedProduct.barcode && (
+                      <Typography variant="body2">
+                        <strong>Barcode:</strong> {scannedProduct.barcode}
+                      </Typography>
+                    )}
+                    {scannedProduct.sku && (
+                      <Typography variant="body2">
+                        <strong>SKU:</strong> {scannedProduct.sku}
+                      </Typography>
+                    )}
+                  </Stack>
+                  
+                  <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 2, 
+                    mb: 2,
+                    flexDirection: isMobile ? 'column' : 'row'
+                  }}>
+                    <TextField
+                      type="number"
+                      label="Quantity"
+                      value={scannedProduct.quantity}
+                      onChange={(e) => setScannedProduct({
+                        ...scannedProduct, 
+                        quantity: Math.max(1, parseInt(e.target.value) || 1)
+                      })}
+                      inputProps={{ min: 1 }}
+                      size={isMobile ? "medium" : "small"}
+                      sx={{ width: isMobile ? '100%' : '120px' }}
+                    />
+                    {isMobile && (
+                      <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
+                        <Button
+                          variant="outlined"
+                          onClick={() => setScannedProduct({
+                            ...scannedProduct,
+                            quantity: Math.max(1, scannedProduct.quantity - 1)
+                          })}
+                          sx={{ minWidth: 40 }}
+                        >
+                          <Remove />
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          onClick={() => setScannedProduct({
+                            ...scannedProduct,
+                            quantity: scannedProduct.quantity + 1
+                          })}
+                          sx={{ minWidth: 40 }}
+                        >
+                          <Add />
+                        </Button>
+                      </Box>
+                    )}
+                  </Box>
+                  
+                  <Button
+                    variant="contained"
+                    startIcon={<AddShoppingCart />}
+                    onClick={handleAddToCart}
+                    sx={{ mt: 1 }}
+                    fullWidth={isMobile}
+                    color="info"
+                  >
+                    Add to Cart
+                  </Button>
+                </CardContent>
+              </Card>
             )}
           </Paper>
         </Grid>
 
         {/* Cart Section */}
         <Grid item xs={12}>
-          <Paper elevation={2} sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>Cart Items</Typography>
+          <Paper 
+            elevation={isMobile ? 1 : 2} 
+            sx={{ 
+              p: isMobile ? 2 : 2,
+              position: 'relative'
+            }}
+          >
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              mb: 2
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ShoppingCart color="primary" />
+                <Typography variant="h6" sx={{ fontSize: isMobile ? '1.1rem' : '1.25rem' }}>
+                  Cart Items
+                </Typography>
+              </Box>
+              {cart.length > 0 && (
+                <Typography variant="subtitle1" sx={{ 
+                  fontWeight: 'bold', 
+                  color: 'primary.main',
+                  fontSize: isMobile ? '1rem' : '1.1rem'
+                }}>
+                  Total: ₹{totalAmount.toFixed(2)}
+                </Typography>
+              )}
+            </Box>
+            
             {cart.length === 0 ? (
-              <Typography>No items in cart.</Typography>
+              <Box sx={{ 
+                textAlign: 'center', 
+                py: isMobile ? 3 : 4,
+                color: 'text.secondary'
+              }}>
+                <ShoppingCart sx={{ fontSize: 48, mb: 1, opacity: 0.5 }} />
+                <Typography variant="body1">No items in cart.</Typography>
+                {isMobile && (
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    Scan products to add them to cart
+                  </Typography>
+                )}
+              </Box>
             ) : (
-              <List>
-                {cart.map((item) => (
-                  <ListItem
-                    key={item.id}
-                    sx={{ flexDirection: 'column', alignItems: 'stretch', py: 2 }}
-                  >
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', mb: 1 }}>
-                      <Typography variant="body1" sx={{ flex: 1 }}>
-                        {item.name} (₹{item.selling_price})
-                      </Typography>
-                      <IconButton edge="end" aria-label="delete" onClick={() => handleRemoveFromCart(item.id)}>
-                        <Delete />
-                      </IconButton>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                      <TextField
-                        type="number"
-                        label="Qty"
-                        value={item.quantity}
-                        onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value))}
-                        inputProps={{ min: 1 }}
-                        size="small"
-                        sx={{ width: '80px' }}
-                      />
-                      <Typography variant="h6" color="primary">
-                        ₹{(item.selling_price * item.quantity).toFixed(2)}
-                      </Typography>
-                    </Box>
-                  </ListItem>
+              <List sx={{ p: 0 }}>
+                {cart.map((item, index) => (
+                  <React.Fragment key={item.id}>
+                    {isMobile ? (
+                      // Mobile Card View for Cart Items
+                      <Card 
+                        sx={{ 
+                          mb: 2,
+                          border: '1px solid',
+                          borderColor: 'divider'
+                        }}
+                      >
+                        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                            <Box sx={{ flex: 1 }}>
+                              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                                {item.name}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                Unit Price: ₹{item.selling_price}
+                              </Typography>
+                            </Box>
+                            <IconButton 
+                              onClick={() => handleRemoveFromCart(item.id)}
+                              color="error"
+                              size="small"
+                            >
+                              <Delete />
+                            </IconButton>
+                          </Box>
+                          
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => handleQuantityChange(item.id, Math.max(1, item.quantity - 1))}
+                                sx={{ minWidth: 32, width: 32, height: 32 }}
+                              >
+                                <Remove fontSize="small" />
+                              </Button>
+                              <TextField
+                                type="number"
+                                value={item.quantity}
+                                onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value) || 1)}
+                                inputProps={{ min: 1 }}
+                                size="small"
+                                sx={{ 
+                                  width: '60px',
+                                  '& .MuiInputBase-input': { 
+                                    textAlign: 'center',
+                                    fontSize: '0.9rem'
+                                  }
+                                }}
+                              />
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
+                                sx={{ minWidth: 32, width: 32, height: 32 }}
+                              >
+                                <Add fontSize="small" />
+                              </Button>
+                            </Box>
+                            
+                            <Typography variant="h6" color="primary" sx={{ fontWeight: 'bold' }}>
+                              ₹{(item.selling_price * item.quantity).toFixed(2)}
+                            </Typography>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      // Desktop List View for Cart Items
+                      <ListItem
+                        sx={{ 
+                          flexDirection: 'column', 
+                          alignItems: 'stretch', 
+                          py: 2,
+                          borderBottom: index < cart.length - 1 ? '1px solid' : 'none',
+                          borderColor: 'divider'
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', mb: 1 }}>
+                          <Typography variant="body1" sx={{ flex: 1, fontWeight: 'medium' }}>
+                            {item.name} (₹{item.selling_price})
+                          </Typography>
+                          <IconButton edge="end" aria-label="delete" onClick={() => handleRemoveFromCart(item.id)} color="error">
+                            <Delete />
+                          </IconButton>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                          <TextField
+                            type="number"
+                            label="Qty"
+                            value={item.quantity}
+                            onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value) || 1)}
+                            inputProps={{ min: 1 }}
+                            size="small"
+                            sx={{ width: '80px' }}
+                          />
+                          <Typography variant="h6" color="primary" sx={{ fontWeight: 'bold' }}>
+                            ₹{(item.selling_price * item.quantity).toFixed(2)}
+                          </Typography>
+                        </Box>
+                      </ListItem>
+                    )}
+                  </React.Fragment>
                 ))}
               </List>
             )}
-            <Divider sx={{ my: 2 }} />
-            
-            {/* Updated button section with loading states */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="h5">Total: ₹{totalAmount.toFixed(2)}</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  onClick={handleClearCart}
-                  startIcon={<Delete />}
-                  disabled={downloadingId !== null}
-                >
-                  Clear Cart
-                </Button>
-                
-                <Button
-                  variant="contained"
-                  color="primary"
-                  onClick={handleCreateTransaction}
-                  startIcon={downloadingId === 'creating' ? <CircularProgress size={20} color="inherit" /> : <AddShoppingCart />}
-                  disabled={cart.length === 0 || !customer || downloadingId !== null}
-                >
-                  {downloadingId === 'creating' ? 'Creating Transaction...' : 
-                   downloadingId ? 'Generating Bill...' : 
-                   'Create Transaction & Print Bill'}
-                </Button>
 
-                {/* Additional Invoice Actions Menu */}
-                {lastTransactionId && (
-                  <>
-                    <IconButton 
-                      onClick={handleMenuOpen}
-                      disabled={downloadingId !== null}
-                    >
-                      <MoreVert />
-                    </IconButton>
-                    <Menu
-                      anchorEl={menuAnchorEl}
-                      open={Boolean(menuAnchorEl)}
-                      onClose={handleMenuClose}
-                    >
-                      <MenuItem 
-                        onClick={() => {
-                          handleMenuClose();
-                          handlePrintBill(lastTransactionId);
-                        }}
-                        disabled={downloadingId !== null}
-                      >
-                        <Print sx={{ mr: 1 }} />
-                        Print Last Invoice
-                      </MenuItem>
-                      <MenuItem 
-                        onClick={() => {
-                          handleMenuClose();
-                          handlePreviewInvoice(lastTransactionId);
-                        }}
-                        disabled={downloadingId !== null}
-                      >
-                        <Preview sx={{ mr: 1 }} />
-                        Preview Last Invoice
-                      </MenuItem>
-                      <MenuItem 
-                        onClick={() => {
-                          handleMenuClose();
-                          handleDownloadInvoice(lastTransactionId);
-                        }}
-                        disabled={downloadingId !== null}
-                      >
-                        <Download sx={{ mr: 1 }} />
-                        Download Last Invoice
-                      </MenuItem>
-                    </Menu>
-                  </>
+            {/* Cart Total and Actions */}
+            {cart.length > 0 && (
+              <Box sx={{ 
+                mt: 3, 
+                pt: 2, 
+                borderTop: '2px solid',
+                borderColor: 'primary.main'
+              }}>
+                <Box sx={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  mb: 2
+                }}>
+                  <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+                    Total Amount:
+                  </Typography>
+                  <Typography variant="h4" color="primary" sx={{ fontWeight: 'bold' }}>
+                    ₹{totalAmount.toFixed(2)}
+                  </Typography>
+                </Box>
+                
+                <Stack spacing={isMobile ? 2 : 1} direction={isMobile ? 'column' : 'row'}>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    onClick={handleCreateTransaction}
+                    disabled={!customer || cart.length === 0}
+                    size={isMobile ? "large" : "medium"}
+                    sx={{ 
+                      flex: isMobile ? 'none' : 1,
+                      py: isMobile ? 1.5 : 1
+                    }}
+                  >
+                    Complete Sale
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={handleClearCart}
+                    size={isMobile ? "medium" : "medium"}
+                    color="error"
+                  >
+                    Clear Cart
+                  </Button>
+                </Stack>
+                
+                {!customer && (
+                  <Typography variant="body2" color="error" sx={{ mt: 1, textAlign: 'center' }}>
+                    Please select a customer to complete the sale
+                  </Typography>
                 )}
               </Box>
-            </Box>
+            )}
           </Paper>
         </Grid>
       </Grid>

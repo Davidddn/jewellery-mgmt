@@ -6,82 +6,38 @@ import {
   Container,
   Paper,
   Typography,
+  Box,
   TextField,
   Button,
   Link,
-  Box,
-  Alert,
   CircularProgress,
-  Tabs,
-  Tab,
-  FormControlLabel,
-  Checkbox,
   InputAdornment,
   IconButton,
-  useTheme,
-  useMediaQuery,
+  Checkbox,
+  FormControlLabel,
+  Alert
 } from '@mui/material';
-import {
-  Visibility,
-  VisibilityOff,
-  PersonOutline,
-  EmailOutlined,
-  LockOutlined,
-} from '@mui/icons-material';
-import { useAuth } from '../contexts/useAuth';
+import { Visibility, VisibilityOff, PersonOutline, LockOutlined, EmailOutlined } from '@mui/icons-material';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import api from '../api/config';
+import { useAuth } from '../contexts/useAuth';
+import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import api from '../api';
 
-// Validation schemas
-const loginSchema = yup.object({
-  username: yup
-    .string()
-    .trim()
-    .min(2, 'Username must be at least 2 characters')
-    .required('Username is required'),
+const loginSchema = yup.object().shape({
+  username: yup.string().trim().required('Username is required'),
   password: yup.string().required('Password is required'),
 });
 
-const registerSchema = yup.object({
-  username: yup
-    .string()
-    .trim()
-    .min(3, 'Username must be at least 3 characters')
-    .max(20, 'Username must be less than 20 characters')
-    .matches(
-      /^[a-zA-Z0-9_]+$/,
-      'Username can only contain letters, numbers, and underscores'
-    )
-    .required('Username is required'),
-  email: yup
-    .string()
-    .trim()
-    .email('Please enter a valid email address')
-    .required('Email is required'),
-  password: yup
-    .string()
-    .min(6, 'Password must be at least 6 characters')
-    .matches(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-      'Password must contain at least one uppercase letter, one lowercase letter, and one number'
-    )
-    .required('Password is required'),
-  firstName: yup
-    .string()
-    .trim()
-    .min(2, 'First name must be at least 2 characters')
-    .required('First name is required'),
-  lastName: yup
-    .string()
-    .trim()
-    .min(2, 'Last name must be at least 2 characters')
-    .required('Last name is required'),
-  role: yup
-    .string()
-    .oneOf(['sales', 'inventory', 'manager', 'admin'], 'Please select a valid role')
-    .required('Role is required'),
+const registerSchema = yup.object().shape({
+  username: yup.string().trim().required('Username is required'),
+  email: yup.string().email('Invalid email').required('Email is required'),
+  firstName: yup.string().trim().min(2, 'First name must be at least 2 characters').required('First name is required'),
+  lastName: yup.string().trim().min(2, 'Last name must be at least 2 characters').required('Last name is required'),
+  password: yup.string().required('Password is required'),
+  role: yup.string().oneOf(['sales', 'inventory', 'manager', 'admin'], 'Please select a valid role').required('Role is required'),
 });
 
 const Login = () => {
@@ -116,7 +72,7 @@ const Login = () => {
     control: loginControl,
     handleSubmit: handleLoginSubmit,
     formState: { errors: loginErrors, isSubmitting: isLoginSubmitting },
-    reset: resetLoginForm,
+    // reset: resetLoginForm, // removed because unused
   } = useForm({
     resolver: yupResolver(loginSchema),
     defaultValues: loginDefaultValues,
@@ -144,16 +100,16 @@ const Login = () => {
   }, [isAuthenticated, loading, navigate]); // <-- Add navigate here
 
   // Event handlers
-  const handleTabChange = (event, newValue) => {
-    setTab(newValue);
-    setError('');
-    setSuccess('');
-    if (newValue === 0) {
-      resetRegisterForm();
-    } else {
-      resetLoginForm();
-    }
-  };
+  // const handleTabChange = (event, newValue) => {
+  //   setTab(newValue);
+  //   setError('');
+  //   setSuccess('');
+  //   if (newValue === 0) {
+  //     resetRegisterForm();
+  //   } else {
+  //     resetLoginForm();
+  //   }
+  // };
 
   const onLogin = async (data) => {
     console.log('Login.jsx: onLogin called');
@@ -169,7 +125,7 @@ const Login = () => {
     
     try {
       console.log('Login.jsx: Attempting login with data:', { username: data.username });
-      const response = await api.post('/auth/login', {
+  const response = await api.post('/api/auth/login', {
         username: data.username.trim(),
         password: data.password,
       });
@@ -177,6 +133,7 @@ const Login = () => {
       console.log('Login.jsx: API response received:', { success: response.data.success });
 
       if (response.data.success && response.data.token && response.data.user) {
+        localStorage.setItem('token', response.data.token); // <-- Add this line
         console.log('Login.jsx: Login successful, calling AuthProvider login');
         await login(response.data.token, response.data.user);
       } else {
@@ -227,59 +184,70 @@ const Login = () => {
   }
 
   return (
-    <Container maxWidth="sm">
-      <Paper elevation={3} sx={{ p: 4, mt: 8 }}>
-        <Typography variant="h5" component="h1" gutterBottom align="center">
+    <Container 
+      maxWidth="sm" 
+      sx={{ 
+        px: { xs: 2, sm: 3 },
+        py: { xs: 2, sm: 4 }
+      }}
+    >
+      <Paper 
+        elevation={isMobile ? 1 : 3} 
+        sx={{ 
+          p: { xs: 3, sm: 4 }, 
+          mt: { xs: 4, sm: 8 },
+          mx: { xs: 0, sm: 'auto' },
+          borderRadius: { xs: 2, sm: 1 }
+        }}
+      >
+        <Typography 
+          variant={isMobile ? "h6" : "h5"} 
+          component="h1" 
+          gutterBottom 
+          align="center"
+          sx={{ 
+            fontWeight: 'bold',
+            mb: { xs: 1, sm: 2 }
+          }}
+        >
           Jewellery Management
         </Typography>
         <Typography
           variant="body1"
           color="text.secondary"
           align="center"
-          sx={{
-            mb: 3,
-            fontSize: {
-              xs: '0.9rem',
-              sm: '1rem',
-            },
-          }}
+          sx={{ mb: { xs: 2, sm: 3 } }}
         >
           {tab === 0 ? 'Sign in to your account' : 'Create a new account'}
         </Typography>
-
-        <Tabs
-          value={tab}
-          onChange={handleTabChange}
-          sx={{ mb: 3 }}
-          centered
-          variant={isMobile ? 'fullWidth' : 'standard'}
-        >
-          <Tab label="Login" />
-          <Tab label="Register" />
-        </Tabs>
-
-        {success && (
-          <Alert
-            severity="success"
-            sx={{ mb: 2, width: '100%' }}
-            onClose={() => setSuccess('')}
-          >
-            {success}
-          </Alert>
-        )}
-
         {error && (
           <Alert
             severity="error"
-            sx={{ mb: 2, width: '100%' }}
+            sx={{ 
+              mb: 2, 
+              width: '100%',
+              fontSize: { xs: '0.875rem', sm: '1rem' }
+            }}
             onClose={() => setError('')}
           >
             {error}
           </Alert>
         )}
-
+        {success && (
+          <Alert
+            severity="success"
+            sx={{ 
+              mb: 2, 
+              width: '100%',
+              fontSize: { xs: '0.875rem', sm: '1rem' }
+            }}
+            onClose={() => setSuccess('')}
+          >
+            {success}
+          </Alert>
+        )}
+        {/* Login and Register forms are handled below, this block was duplicate and misplaced */}
         {tab === 0 ? (
-          /* Login Form */
           <Box component="form" onSubmit={handleLoginSubmit(onLogin)} noValidate>
             <Controller
               name="username"
@@ -346,25 +314,34 @@ const Login = () => {
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                   color="primary"
-                  size={isMobile ? 'small' : 'medium'}
+                  size={isMobile ? 'medium' : 'medium'}
                 />
               }
-              label="Remember Me"
-              sx={{ mt: 1 }}
+              label={
+                <Typography variant="body2" sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+                  Remember Me
+                </Typography>
+              }
+              sx={{ 
+                mt: 1,
+                mb: { xs: 1, sm: 0 }
+              }}
             />
 
             <Button
               type="submit"
               fullWidth
               variant="contained"
-              size="large"
+              size={isMobile ? "large" : "large"}
               sx={{
-                mt: 2,
-                py: 1.5,
+                mt: { xs: 2, sm: 2 },
+                py: { xs: 1.5, sm: 1.5 },
                 fontSize: {
-                  xs: '0.9rem',
-                  sm: '1rem',
+                  xs: '1rem',
+                  sm: '1.1rem',
                 },
+                fontWeight: 'bold',
+                textTransform: 'none'
               }}
               disabled={isSubmitting}
             >
@@ -374,8 +351,17 @@ const Login = () => {
                 'Sign In'
               )}
             </Button>
-            <Box textAlign="center">
-              <Link component={RouterLink} to="/register" variant="body2">
+            <Box textAlign="center" sx={{ mt: 2 }}>
+              <Link 
+                component={RouterLink} 
+                to="/register" 
+                variant="body2"
+                sx={{ 
+                  fontSize: { xs: '0.875rem', sm: '1rem' },
+                  textDecoration: 'none',
+                  '&:hover': { textDecoration: 'underline' }
+                }}
+              >
                 {"Don't have an account? Sign Up"}
               </Link>
             </Box>
@@ -543,21 +529,23 @@ const Login = () => {
               fullWidth
               variant="contained"
               color="secondary"
-              size="large"
+              size={isMobile ? "large" : "large"}
               sx={{
-                mt: 2,
-                py: 1.5,
+                mt: { xs: 2, sm: 2 },
+                py: { xs: 1.5, sm: 1.5 },
                 fontSize: {
-                  xs: '0.9rem',
-                  sm: '1rem',
+                  xs: '1rem',
+                  sm: '1.1rem',
                 },
+                fontWeight: 'bold',
+                textTransform: 'none'
               }}
               disabled={isSubmitting}
             >
               {isSubmitting ? (
                 <CircularProgress size={24} color="inherit" />
               ) : (
-                'Register'
+                'Create Account'
               )}
             </Button>
           </Box>

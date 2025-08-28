@@ -1,6 +1,6 @@
 // backend/seed.js
 
-const { sequelize, User, Customer, Product } = require('./models');
+const { sequelize, User, Customer, Product, InvoiceTemplate } = require('./models');
 
 const seedDatabase = async () => {
   console.log('Starting the seeding process...');

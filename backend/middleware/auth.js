@@ -86,4 +86,15 @@ const authorize = (roles = []) => {
   };
 };
 
-module.exports = { protect: auth, authorize };
+// Middleware to require premium user
+const requirePremium = (req, res, next) => {
+  if (!req.user || !req.user.is_premium) {
+    return res.status(403).json({
+      success: false,
+      message: 'Premium access required'
+    });
+  }
+  next();
+};
+
+module.exports = { protect: auth, authorize, requirePremium };

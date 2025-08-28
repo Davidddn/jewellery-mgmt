@@ -4,15 +4,20 @@ const logger = require('../utils/logger');
 class GoldRateService {
   async getGoldRate(purity = '24K') {
     try {
-      const goldRate = await GoldRate.findOne({ where: { purity } });
-      if (goldRate) {
+      const latestRate = await GoldRate.findOne({
+        order: [['date', 'DESC']],
+      });
+
+      if (latestRate) {
+        const rate = latestRate[`rate_${purity.toLowerCase()}`];
         return {
-          purity: goldRate.purity,
-          rate: parseFloat(goldRate.rate),
-          timestamp: goldRate.updatedAt,
+          purity,
+          rate: parseFloat(rate),
+          timestamp: latestRate.updatedAt,
           source: 'manual'
         };
       }
+
       // Fallback to a default if not set
       const mockRates = { '24K': 65000, '22K': 59500, '18K': 48750 };
       return { purity, rate: mockRates[purity] || 0, timestamp: new Date(), source: 'default' };
@@ -24,3 +29,4 @@ class GoldRateService {
 }
 
 module.exports = new GoldRateService();
+

@@ -1,8 +1,55 @@
 import React, { useState, useEffect } from 'react';
+import { subscribeUserToPush, unsubscribeUserFromPush } from '../pushNotifications';
+import { useState as useReactState } from 'react';
 import {
-  Typography, Box, Tabs, Tab, TextField, Button, Paper, Grid, CircularProgress, Alert, Switch, FormControlLabel, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Select, MenuItem, InputLabel, FormControl, Dialog, DialogTitle, DialogContent, DialogActions
+  Typography, 
+  Box, 
+  Tabs, 
+  Tab, 
+  TextField, 
+  Button, 
+  Paper, 
+  Grid, 
+  CircularProgress, 
+  Alert, 
+  Switch, 
+  FormControlLabel, 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableContainer, 
+  TableHead, 
+  TableRow, 
+  IconButton, 
+  Select, 
+  MenuItem, 
+  InputLabel, 
+  FormControl, 
+  Dialog, 
+  DialogTitle, 
+  DialogContent, 
+  DialogActions,
+  Card, 
+  CardMedia, 
+  CardContent, 
+  CardActions, 
+  Chip, 
+  Divider, 
+  Stack,
+  useTheme,
+  useMediaQuery,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  Avatar,
+  Badge
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
+import { 
+  Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon,
+  CheckCircle as CheckCircleIcon, RadioButtonUnchecked as RadioButtonUncheckedIcon,
+  CloudUpload as CloudUploadIcon, Close as CloseIcon // ADD THESE
+} from '@mui/icons-material';
 import { useAuth } from '../contexts/useAuth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authAPI } from '../api/auth';
@@ -68,6 +115,76 @@ function TabPanel(props) {
 }
 
 const Settings = () => {
+  // Theme and responsive hooks
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  // Push notification state
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushStatus, setPushStatus] = useReactState(null); // 'success' | 'error' | null
+  const [pushMessage, setPushMessage] = useReactState('');
+  const [testNotifLoading, setTestNotifLoading] = useReactState(false);
+  useEffect(() => {
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      navigator.serviceWorker.ready.then(reg => {
+        reg.pushManager.getSubscription().then(sub => {
+          setPushEnabled(!!sub);
+        });
+      });
+    }
+  }, []);
+
+  const handlePushToggle = async (e) => {
+    setPushStatus(null);
+    setPushMessage('');
+    try {
+      if (e.target.checked) {
+        await subscribeUserToPush();
+        setPushEnabled(true);
+        setPushStatus('success');
+        setPushMessage('Push notifications enabled!');
+      } else {
+        await unsubscribeUserFromPush();
+        setPushEnabled(false);
+        setPushStatus('success');
+        setPushMessage('Push notifications disabled.');
+      }
+    } catch {
+      setPushStatus('error');
+      setPushMessage('Failed to update push notification status.');
+    }
+  };
+
+  // Send test notification
+  const sendTestNotification = async () => {
+    setTestNotifLoading(true);
+    setPushStatus(null);
+    setPushMessage('');
+    try {
+      const res = await fetch('http://localhost:5000/api/push/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Test Notification',
+          body: 'This is a test push notification.',
+          url: window.location.origin
+        })
+      });
+      if (res.ok) {
+        setPushStatus('success');
+        setPushMessage('Test notification sent!');
+      } else {
+        setPushStatus('error');
+        setPushMessage('Failed to send test notification.');
+      }
+    } catch {
+      setPushStatus('error');
+      setPushMessage('Failed to send test notification.');
+    } finally {
+      setTestNotifLoading(false);
+    }
+  };
+
   // 1. HOOKS AND STATE
   const { user, logout, isLoading: isAuthLoading } = useAuth();
   const queryClient = useQueryClient();
@@ -80,6 +197,10 @@ const Settings = () => {
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState('');
   const [logoRefreshKey, setLogoRefreshKey] = useState(0);
+  const [allLogos, setAllLogos] = useState([]);
+  const [selectedLogoForPreview, setSelectedLogoForPreview] = useState(null);
+  const [logoManagementOpen, setLogoManagementOpen] = useState(false); // ADD THIS
+  const [uploadPreview, setUploadPreview] = useState(null); // ADD THIS
 
   // 2. FORMS (DECLARED BEFORE DATA FETCHING)
   const { control: profileControl, handleSubmit: handleProfileSubmit, reset: resetProfileForm, formState: { errors: profileErrors } } = useForm({
@@ -126,13 +247,22 @@ const Settings = () => {
   const { data: logoData, isLoading: isLogoLoading } = useQuery({
     queryKey: ['logo', logoRefreshKey],
     queryFn: () => settingsAPI.getLogo(),
-    retry: 1,
-    refetchOnWindowFocus: false
+    retry: 2,
+    retryDelay: 1000,
+    refetchOnWindowFocus: false,
+    staleTime: 0, // Always fetch fresh data
+    cacheTime: 0  // Don't cache the logo data
   });
 
   const { data: settingsData, isLoading: areSettingsLoading } = useQuery({
     queryKey: ['settings'],
     queryFn: () => settingsAPI.getSettings(),
+  });
+
+  const { data: allLogosData, isLoading: isAllLogosLoading } = useQuery({
+    queryKey: ['all-logos', logoRefreshKey],
+    queryFn: () => settingsAPI.getAllLogos(),
+    refetchOnWindowFocus: false,
   });
 
   // 4. MUTATIONS
@@ -189,8 +319,16 @@ const Settings = () => {
     onSuccess: () => {
       setSuccessAlert('Logo uploaded successfully!');
       setLogoFile(null);
-      setLogoRefreshKey(prev => prev + 1);
-      queryClient.invalidateQueries(['logo']);
+      setUploadPreview(null); // Clear upload preview
+    
+      // Force refresh the logo with a small delay
+      setTimeout(() => {
+        setLogoRefreshKey(prev => prev + 1);
+        queryClient.invalidateQueries(['logo']);
+        queryClient.invalidateQueries(['all-logos']);
+        queryClient.refetchQueries(['logo']);
+        queryClient.refetchQueries(['all-logos']);
+      }, 1000);
     },
     onError: (error) => {
       setErrorAlert('Failed to upload logo: ' + (error.response?.data?.message || error.message));
@@ -204,6 +342,19 @@ const Settings = () => {
       setSuccessAlert('Settings updated successfully!');
     },
     onError: (err) => setErrorAlert(err.response?.data?.message || 'Failed to update settings.'),
+  });
+
+  const setActiveLogoMutation = useMutation({
+    mutationFn: settingsAPI.setActiveLogo,
+    onSuccess: () => {
+      setSuccessAlert('Active logo updated successfully!');
+      setLogoRefreshKey(prev => prev + 1);
+      queryClient.invalidateQueries(['logo']);
+      queryClient.refetchQueries(['logo']);
+    },
+    onError: (error) => {
+      setErrorAlert('Failed to set active logo: ' + (error.response?.data?.message || error.message));
+    }
   });
 
   // 5. EFFECTS (AFTER DATA FETCHING)
@@ -256,6 +407,12 @@ const Settings = () => {
   }, [logoData]);
 
   useEffect(() => {
+    if (allLogosData) {
+      setAllLogos(allLogosData);
+    }
+  }, [allLogosData]);
+
+  useEffect(() => {
     if (successAlert || errorAlert) {
       const timer = setTimeout(() => {
         setSuccessAlert('');
@@ -272,21 +429,16 @@ const Settings = () => {
     setSuccessAlert('');
   };
 
-  const handleLogoChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
+  const handleLogoChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
       setLogoFile(file);
+      // Create preview for upload
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setLogoPreview(reader.result);
+      reader.onload = (e) => {
+        setUploadPreview(e.target.result);
       };
       reader.readAsDataURL(file);
-    }
-  };
-
-  const handleLogoUpload = () => {
-    if (logoFile) {
-      uploadLogoMutation.mutate(logoFile);
     }
   };
 
@@ -330,6 +482,52 @@ const Settings = () => {
     }
   };
 
+  const handleSelectLogo = (filename) => {
+    setActiveLogoMutation.mutate(filename);
+  };
+
+  const handlePreviewLogo = (logoInfo) => {
+    setSelectedLogoForPreview(logoInfo);
+  };
+
+  const handleOpenLogoManagement = () => {
+    setLogoManagementOpen(true);
+  };
+
+  const handleCloseLogoManagement = () => {
+    setLogoManagementOpen(false);
+    setLogoFile(null);
+    setUploadPreview(null);
+  };
+
+  const handleUploadFromModal = () => {
+    if (logoFile) {
+      uploadLogoMutation.mutate(logoFile);
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const formatDate = (date) => {
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getApiUrl = () => {
+    return import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  };
+
   // 7. EARLY RETURNS
   if (isAuthLoading) {
     return (
@@ -341,8 +539,36 @@ const Settings = () => {
 
   // 8. RENDER
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom>Settings</Typography>
+    <Box sx={{ p: isMobile ? 1 : 0 }}>
+      <Box sx={{ mb: 3 }}>
+        <FormControlLabel
+          control={<Switch checked={pushEnabled} onChange={handlePushToggle} />}
+          label="Enable Push Notifications"
+        />
+        {pushStatus && (
+          <Alert severity={pushStatus} sx={{ mt: 2 }}>{pushMessage}</Alert>
+        )}
+        <Button
+          variant="outlined"
+          color="primary"
+          sx={{ mt: 2 }}
+          onClick={sendTestNotification}
+          disabled={!pushEnabled || testNotifLoading}
+        >
+          {testNotifLoading ? <CircularProgress size={20} /> : 'Send Test Notification'}
+        </Button>
+      </Box>
+      {/* Header */}
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: 1, 
+        mb: 3 
+      }}>
+        <Typography variant={isMobile ? "h5" : "h4"} sx={{ fontWeight: 'bold' }}>
+          Settings
+        </Typography>
+      </Box>
       
       {/* Success/Error Alerts */}
       {errorAlert && (
@@ -356,8 +582,27 @@ const Settings = () => {
         </Alert>
       )}
 
-      <Paper>
-        <Tabs value={currentTab} onChange={handleTabChange}>
+      <Paper 
+        elevation={isMobile ? 1 : 2}
+        sx={{ 
+          overflow: 'hidden',
+          borderRadius: isMobile ? 2 : 1
+        }}
+      >
+        <Tabs 
+          value={currentTab} 
+          onChange={handleTabChange}
+          variant={isMobile ? "scrollable" : "standard"}
+          scrollButtons={isMobile ? "auto" : false}
+          allowScrollButtonsMobile={isMobile}
+          sx={{
+            '& .MuiTab-root': {
+              fontSize: isMobile ? '0.875rem' : '0.9375rem',
+              minWidth: isMobile ? 80 : 'auto',
+              py: isMobile ? 1.5 : 1
+            }
+          }}
+        >
           <Tab label="General" />
           <Tab label="Profile" />
           <Tab label="Security" />
@@ -367,9 +612,12 @@ const Settings = () => {
 
         {/* General Settings */}
         <TabPanel value={currentTab} index={0}>
-          <Typography variant="h6" gutterBottom>Business Information</Typography>
-          <Box component="form" onSubmit={handleSettingsSubmit(onSettingsSave)} noValidate sx={{ mt: 1 }}>
-            <Grid container spacing={3}>
+          <Box sx={{ p: isMobile ? 2 : 3 }}>
+            <Typography variant="h6" sx={{ mb: 2, fontSize: isMobile ? '1.1rem' : '1.25rem' }}>
+              Business Information
+            </Typography>
+            <Box component="form" onSubmit={handleSettingsSubmit(onSettingsSave)} noValidate sx={{ mt: 1 }}>
+              <Grid container spacing={isMobile ? 2 : 3}>
               {/* Basic Information */}
               <Grid item xs={12}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>Basic Information</Typography>
@@ -481,10 +729,10 @@ const Settings = () => {
                   {Object.entries(settingsData).map(([key, value]) => (
                     <Grid item xs={12} sm={6} md={4} key={key}>
                       <Box sx={{ p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
-                        <Typography variant="caption" color="textSecondary">
+                        <Typography variant="caption" color="textSecondary" component="span">
                           {key.replace(/_/g, ' ').toUpperCase()}
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 'medium' }} component="span">
                           {value || 'Not set'}
                         </Typography>
                       </Box>
@@ -502,9 +750,11 @@ const Settings = () => {
           {/* Logo Section */}
           <Box sx={{ mt: 4 }}>
             <Typography variant="h6" gutterBottom>Company Logo</Typography>
+            
+            {/* Current Active Logo */}
             <Paper sx={{ p: 3 }}>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>Current Active Logo</Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                
                 <Box sx={{ border: '2px dashed #ccc', p: 2, borderRadius: 2, minWidth: 200, textAlign: 'center' }}>
                   {isLogoLoading ? (
                     <CircularProgress />
@@ -522,11 +772,10 @@ const Settings = () => {
                       }}
                       onError={(e) => {
                         console.error('Logo image failed to load');
-                        e.target.style.display = 'none'; // Hide broken image instead of replacing
+                        e.target.style.display = 'none';
                       }}
                     />
                   ) : (
-                    // Use a simple text placeholder instead of external image
                     <Box sx={{ 
                       width: '200px', 
                       height: '100px', 
@@ -539,38 +788,28 @@ const Settings = () => {
                       border: '1px dashed #ccc',
                       margin: '0 auto'
                     }}>
-                      No Logo Uploaded
+                      No Logo Selected
                     </Box>
                   )}
                 </Box>
                 <Box>
-                  <Button variant="contained" component="label" sx={{ mb: 1 }}>
-                    Choose New Logo
-                    <input type="file" hidden accept="image/*" onChange={handleLogoChange} />
+                  <Button 
+                    variant="contained" 
+                    startIcon={<CloudUploadIcon />}
+                    onClick={handleOpenLogoManagement}
+                    sx={{ mb: 1 }}
+                  >
+                    Manage Logos
                   </Button>
-                  {logoFile && (
-                    <Box sx={{ mt: 2 }}>
-                      <Typography variant="body2" sx={{ mb: 1 }}>
-                        Selected: {logoFile.name}
-                      </Typography>
-                      <Button 
-                        variant="outlined" 
-                        onClick={handleLogoUpload} 
-                        disabled={uploadLogoMutation.isLoading}
-                      >
-                        {uploadLogoMutation.isLoading ? 'Uploading...' : 'Upload Logo'}
-                      </Button>
-                    </Box>
-                  )}
                   <Box sx={{ mt: 2 }}>
                     <Typography variant="caption" color="textSecondary">
-                      Accepted formats: JPG, PNG. Max size: 5MB<br/>
-                      The latest uploaded logo will be displayed.
+                      Upload new logos or select from existing ones
                     </Typography>
                   </Box>
                 </Box>
               </Box>
             </Paper>
+          </Box>
           </Box>
         </TabPanel>
 
@@ -674,41 +913,111 @@ const Settings = () => {
             </Paper>
 
             {isUsersLoading ? (
-              <CircularProgress />
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress />
+              </Box>
             ) : (
-              <TableContainer component={Paper}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Full Name</TableCell>
-                      <TableCell>Username</TableCell>
-                      <TableCell>Email</TableCell>
-                      <TableCell>Role</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {Array.isArray(usersData?.users) && usersData.users.map((u) => (
-                      <TableRow key={u.id}>
-                        <TableCell>{`${u.firstName} ${u.lastName}`}</TableCell>
-                        <TableCell>{u.username}</TableCell>
-                        <TableCell>{u.email}</TableCell>
-                        <TableCell sx={{ textTransform: 'capitalize' }}>{u.role}</TableCell>
-                        <TableCell>{u.is_active ? 'Active' : 'Inactive'}</TableCell>
-                        <TableCell align="right">
-                          <IconButton onClick={() => handleOpenUserDialog(u)} color="primary" disabled={u.id === user.id}>
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton onClick={() => handleDeleteUser(u.id)} color="error" disabled={u.id === user.id}>
-                            <DeleteIcon />
-                          </IconButton>
+              <Box sx={{ 
+                overflowX: 'auto',
+                '& .MuiTableContainer-root': {
+                  borderRadius: 2
+                }
+              }}>
+                <TableContainer component={Paper} sx={{ overflowX: 'auto',
+                  minWidth: { xs: 700, md: 'auto' }
+                }}>
+                  <Table stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                          Full Name
+                        </TableCell>
+                        <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                          Username
+                        </TableCell>
+                        <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                          Email
+                        </TableCell>
+                        <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                          Role
+                        </TableCell>
+                        <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                          Status
+                        </TableCell>
+                        <TableCell align="right" sx={{ 
+                          fontSize: { xs: '0.75rem', md: '0.875rem' },
+                          minWidth: '120px'
+                        }}>
+                          Actions
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                    </TableHead>
+                    <TableBody>
+                      {Array.isArray(usersData?.users) && usersData.users.map((u) => (
+                        <TableRow key={u.id}>
+                          <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                            <Typography variant="body2" noWrap sx={{ 
+                              maxWidth: { xs: '120px', md: '200px' },
+                              fontSize: { xs: '0.75rem', md: '0.875rem' }
+                            }}>
+                              {`${u.firstName} ${u.lastName}`}
+                            </Typography>
+                          </TableCell>
+                          <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                            {u.username}
+                          </TableCell>
+                          <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                            <Typography variant="body2" noWrap sx={{ 
+                              maxWidth: { xs: '150px', md: '250px' },
+                              fontSize: { xs: '0.75rem', md: '0.875rem' }
+                            }}>
+                              {u.email}
+                            </Typography>
+                          </TableCell>
+                          <TableCell sx={{ 
+                            textTransform: 'capitalize',
+                            fontSize: { xs: '0.75rem', md: '0.875rem' }
+                          }}>
+                            {u.role}
+                          </TableCell>
+                          <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                            <Chip 
+                              label={u.is_active ? 'Active' : 'Inactive'}
+                              color={u.is_active ? 'success' : 'default'}
+                              size={isMobile ? "small" : "medium"}
+                              sx={{ fontSize: { xs: '0.625rem', md: '0.75rem' } }}
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <Box sx={{ 
+                              display: 'flex', 
+                              gap: { xs: 0.5, md: 1 },
+                              justifyContent: 'center'
+                            }}>
+                              <IconButton 
+                                onClick={() => handleOpenUserDialog(u)} 
+                                color="primary" 
+                                disabled={u.id === user.id}
+                                size={isMobile ? "small" : "medium"}
+                              >
+                                <EditIcon />
+                              </IconButton>
+                              <IconButton 
+                                onClick={() => handleDeleteUser(u.id)} 
+                                color="error" 
+                                disabled={u.id === user.id}
+                                size={isMobile ? "small" : "medium"}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
             )}
           </TabPanel>
         )}
@@ -731,7 +1040,7 @@ const Settings = () => {
       </Paper>
 
       {/* Add/Edit User Dialog */}
-      <Dialog open={userDialogOpen} onClose={handleCloseUserDialog} maxWidth="sm" fullWidth>
+  <Dialog open={userDialogOpen} onClose={handleCloseUserDialog} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>{editingUser ? 'Edit User' : 'Add New User'}</DialogTitle>
         <Box component="form" onSubmit={handleUserFormSubmit(onUserFormSave)}>
           <DialogContent>
@@ -793,6 +1102,337 @@ const Settings = () => {
             </Button>
           </DialogActions>
         </Box>
+      </Dialog>
+
+      {/* Logo Management Dialog */}
+  <Dialog fullScreen={isMobile}
+        open={logoManagementOpen} 
+        onClose={handleCloseLogoManagement}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: { minHeight: '70vh' }
+        }}
+      >
+        <DialogTitle sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          borderBottom: '1px solid #e0e0e0'
+        }}>
+          Logo Management
+          <IconButton onClick={handleCloseLogoManagement}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        
+        <DialogContent sx={{ p: 3 }}>
+          {/* Upload New Logo Section */}
+          <Paper sx={{ p: 3, mb: 3, bgcolor: '#f8f9fa' }}>
+            <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+              Upload New Logo
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
+              {/* Upload Preview */}
+              <Box sx={{ 
+                border: '2px dashed #1976d2', 
+                borderRadius: 2, 
+                p: 2, 
+                minWidth: 200,
+                textAlign: 'center',
+                bgcolor: 'white'
+              }}>
+                {uploadPreview ? (
+                  <img 
+                    src={uploadPreview}
+                    alt="Upload Preview" 
+                    style={{ 
+                      maxWidth: '200px', 
+                      maxHeight: '120px', 
+                      objectFit: 'contain',
+                      display: 'block',
+                      margin: '0 auto'
+                    }}
+                  />
+                ) : (
+                  <Box sx={{ 
+                    width: '200px', 
+                    height: '120px', 
+                    display: 'flex', 
+                    flexDirection: 'column',
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    color: 'primary.main',
+                    gap: 1
+                  }}>
+                    <CloudUploadIcon sx={{ fontSize: 40 }} />
+                    <Typography variant="body2">
+                      Upload Preview
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+              
+              {/* Upload Controls */}
+              <Box sx={{ flex: 1 }}>
+                <Stack spacing={2}>
+                  <Button 
+                    variant="outlined" 
+                    component="label" 
+                    startIcon={<CloudUploadIcon />}
+                    fullWidth
+                  >
+                    Choose Logo File
+                    <input 
+                      type="file" 
+                      hidden 
+                      accept="image/*" 
+                      onChange={handleLogoChange} 
+                    />
+                  </Button>
+                  
+                  {logoFile && (
+                    <Box sx={{ 
+                      p: 2, 
+                      bgcolor: 'success.50', 
+                      borderRadius: 1, 
+                      border: '1px solid',
+                      borderColor: 'success.200'
+                    }}>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                        Selected File:
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        {logoFile.name}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        Size: {formatFileSize(logoFile.size)}
+                      </Typography>
+                    </Box>
+                  )}
+                  
+                  <Button 
+                    variant="contained" 
+                    onClick={handleUploadFromModal}
+                    disabled={!logoFile || uploadLogoMutation.isLoading}
+                    fullWidth
+                  >
+                    {uploadLogoMutation.isLoading ? 'Uploading...' : 'Upload Logo'}
+                  </Button>
+                  
+                  <Typography variant="caption" color="textSecondary">
+                    Accepted formats: JPG, PNG. Max size: 5MB
+                  </Typography>
+                </Stack>
+              </Box>
+            </Box>
+          </Paper>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Existing Logos Section */}
+          <Box>
+            <Typography variant="subtitle1" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+              Select from Existing Logos
+            </Typography>
+            {isAllLogosLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : allLogos.length === 0 ? (
+              <Paper sx={{ p: 4, textAlign: 'center', bgcolor: '#f5f5f5' }}>
+                <Typography variant="body1" color="textSecondary">
+                  No logos uploaded yet
+                </Typography>
+                <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+                  Upload your first logo using the section above
+                </Typography>
+              </Paper>
+            ) : (
+              <Grid container spacing={2}>
+                {allLogos.map((logoInfo, index) => (
+                  <Grid item xs={12} sm={6} md={4} lg={3} key={logoInfo.filename}>
+                    <Card sx={{ 
+                      height: '100%', 
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      border: index === 0 ? '3px solid #1976d2' : '1px solid #e0e0e0',
+                      position: 'relative',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      '&:hover': {
+                        boxShadow: 3,
+                        transform: 'translateY(-2px)'
+                      }
+                    }}>
+                      {index === 0 && (
+                        <Chip 
+                          label="Current Active" 
+                          color="primary" 
+                          size="small"
+                          sx={{ 
+                            position: 'absolute', 
+                            top: 8, 
+                            right: 8, 
+                            zIndex: 1,
+                            fontWeight: 'bold'
+                          }}
+                        />
+                      )}
+                      <CardMedia
+                        component="img"
+                        height="140"
+                        image={`${getApiUrl()}${logoInfo.url}`}
+                        alt={`Logo ${logoInfo.filename}`}
+                        sx={{ 
+                          objectFit: 'contain', 
+                          p: 2,
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => handlePreviewLogo(logoInfo)}
+                      />
+                      <CardContent sx={{ flexGrow: 1, pt: 1 }}>
+                        <Typography variant="caption" color="textSecondary" gutterBottom>
+                          Uploaded: {formatDate(logoInfo.uploadDate)}
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
+                          Size: {formatFileSize(logoInfo.size)}
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary" sx={{ 
+                          display: 'block', 
+                          wordBreak: 'break-all',
+                          fontSize: '0.65rem',
+                          opacity: 0.7
+                        }} component="span">
+                          {logoInfo.filename}
+                        </Typography>
+                      </CardContent>
+                      <CardActions sx={{ pt: 0, pb: 2 }}>
+                        {index === 0 ? (
+                          <Button 
+                            size="small" 
+                            disabled
+                            startIcon={<CheckCircleIcon />}
+                            sx={{ 
+                              color: 'success.main',
+                              fontWeight: 'bold',
+                              width: '100%'
+                            }}
+                          >
+                            Currently Active
+                          </Button>
+                        ) : (
+                          <Button 
+                            size="small" 
+                            variant="outlined"
+                            onClick={() => handleSelectLogo(logoInfo.filename)}
+                            disabled={setActiveLogoMutation.isLoading}
+                            startIcon={<RadioButtonUncheckedIcon />}
+                            sx={{ width: '100%' }}
+                          >
+                            {setActiveLogoMutation.isLoading ? 'Setting...' : 'Set as Active'}
+                          </Button>
+                        )}
+                      </CardActions>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            )}
+          </Box>
+        </DialogContent>
+        
+        <DialogActions sx={{ 
+          p: 3, 
+          borderTop: '1px solid #e0e0e0',
+          bgcolor: '#f8f9fa'
+        }}>
+          <Button 
+            onClick={handleCloseLogoManagement}
+            variant="outlined"
+          >
+            Close
+          </Button>
+          <Typography variant="body2" color="textSecondary" sx={{ flex: 1, ml: 2 }}>
+            Click on any logo to preview, or use "Set as Active" to change your current logo
+          </Typography>
+        </DialogActions>
+      </Dialog>
+
+      {/* Logo Preview Dialog */}
+  <Dialog fullScreen={isMobile}
+        open={!!selectedLogoForPreview} 
+        onClose={() => setSelectedLogoForPreview(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center' 
+        }}>
+          Logo Preview
+          <IconButton onClick={() => setSelectedLogoForPreview(null)}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          {selectedLogoForPreview && (
+            <Box sx={{ textAlign: 'center' }}>
+              <img 
+                src={`${getApiUrl()}${selectedLogoForPreview.url}`}
+                alt={`Logo ${selectedLogoForPreview.filename}`}
+                style={{ 
+                  maxWidth: '100%', 
+                  maxHeight: '400px', 
+                  objectFit: 'contain',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                }}
+              />
+              <Paper sx={{ mt: 3, p: 2, textAlign: 'left', bgcolor: '#f8f9fa' }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" component="div">
+                      <strong>Filename:</strong><br />
+                      {selectedLogoForPreview.filename}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" component="div">
+                      <strong>File Size:</strong><br />
+                      {formatFileSize(selectedLogoForPreview.size)}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="body2" component="div">
+                      <strong>Upload Date:</strong><br />
+                      {formatDate(selectedLogoForPreview.uploadDate)}
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Paper>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectedLogoForPreview(null)}>
+            Close
+          </Button>
+          {selectedLogoForPreview && allLogos[0]?.filename !== selectedLogoForPreview.filename && (
+            <Button 
+              variant="contained" 
+              onClick={() => {
+                handleSelectLogo(selectedLogoForPreview.filename);
+                setSelectedLogoForPreview(null);
+              }}
+              disabled={setActiveLogoMutation.isLoading}
+            >
+              {setActiveLogoMutation.isLoading ? 'Setting as Active...' : 'Set as Active Logo'}
+            </Button>
+          )}
+        </DialogActions>
       </Dialog>
     </Box>
   );

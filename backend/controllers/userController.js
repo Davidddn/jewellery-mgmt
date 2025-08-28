@@ -95,3 +95,16 @@ exports.deleteUser = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+exports.getActiveUserCount = async (req, res) => {
+  try {
+    const count = await User.count({
+      where: {
+        is_active: true,
+      },
+    });
+    res.json({ success: true, data: { activeUsers: count } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

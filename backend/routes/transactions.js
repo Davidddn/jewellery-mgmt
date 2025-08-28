@@ -33,6 +33,10 @@ router.route('/')
 router.post('/upload/csv', upload.single('csv'), uploadCSV);
 router.get('/export/csv', transactionController.exportCSV);
 
+router.get('/recent', transactionController.getRecentTransactions);
+router.get('/realtime-stats', transactionController.getRealtimeStats);
+router.get('/sales-timeline', transactionController.getSalesTimeline);
+
 // This is the route that was causing the crash (around line 14)
 router.route('/:id')
   .get(getTransactionById)

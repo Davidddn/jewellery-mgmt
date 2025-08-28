@@ -1,4 +1,4 @@
-const GoldRate = require('../models/GoldRate');
+const { GoldRate } = require('../models');
 
 exports.createGoldRate = async (req, res) => {
   try {
@@ -12,15 +12,15 @@ exports.createGoldRate = async (req, res) => {
 
 exports.getLatestGoldRate = async (req, res) => {
   try {
-    const latestRate = await GoldRate.findAll({
+    const latestRate = await GoldRate.findOne({
       order: [['date', 'DESC']],
-      limit: 1,
     });
-    if (!latestRate || latestRate.length === 0) {
+    if (!latestRate) {
       return res.status(404).json({ success: false, message: 'No gold rates found.' });
     }
-    res.status(200).json({ success: true, rate: latestRate[0] });
+  res.status(200).json({ success: true, data: latestRate });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message, error: error });
+    console.error('Error in getLatestGoldRate:', error);
+    res.status(500).json({ success: false, message: error.message, error: error.stack });
   }
 };

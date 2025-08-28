@@ -8,11 +8,15 @@ import {
   Button,
   Link,
   Box,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import { useAuth } from '../contexts/useAuth';
 
 const Register = () => {
   const { register } = useAuth();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const [formData, setFormData] = useState({
     username: '',
@@ -46,9 +50,21 @@ const Register = () => {
   };
 
   return (
-    <Container maxWidth="sm">
-      <Paper elevation={3} sx={{ p: 4, mt: 8 }}>
-        <Typography variant="h5" component="h1" gutterBottom>
+    <Container maxWidth="sm" sx={{ px: { xs: 2, sm: 3 } }}>
+      <Paper 
+        elevation={isMobile ? 1 : 3} 
+        sx={{ 
+          p: { xs: 3, sm: 4 }, 
+          mt: { xs: 4, sm: 8 },
+          mx: { xs: 0, sm: 'auto' }
+        }}
+      >
+        <Typography 
+          variant={isMobile ? "h6" : "h5"} 
+          component="h1" 
+          gutterBottom
+          align="center"
+        >
           Register
         </Typography>
         <Box component="form" onSubmit={handleSubmit} noValidate>
@@ -61,6 +77,7 @@ const Register = () => {
             name="username"
             autoComplete="username"
             autoFocus
+            size={isMobile ? "small" : "medium"}
             // Connects the input to the state
             value={formData.username}
             onChange={handleChange}
@@ -73,6 +90,7 @@ const Register = () => {
             label="Email Address"
             name="email"
             autoComplete="email"
+            size={isMobile ? "small" : "medium"}
             // Connects the input to the state
             value={formData.email}
             onChange={handleChange}
@@ -86,6 +104,7 @@ const Register = () => {
             type="password"
             id="password"
             autoComplete="new-password"
+            size={isMobile ? "small" : "medium"}
             // Connects the input to the state
             value={formData.password}
             onChange={handleChange}
@@ -98,6 +117,7 @@ const Register = () => {
             label="Confirm Password"
             type="password"
             id="confirmPassword"
+            size={isMobile ? "small" : "medium"}
             // Connects the input to the state
             value={formData.confirmPassword}
             onChange={handleChange}
@@ -106,13 +126,16 @@ const Register = () => {
             type="submit"
             fullWidth
             variant="contained"
+            size={isMobile ? "medium" : "large"}
             sx={{ mt: 3, mb: 2 }}
           >
             Register
           </Button>
-          <Link component={RouterLink} to="/login" variant="body2">
-            Already have an account? Sign in
-          </Link>
+          <Box sx={{ textAlign: 'center' }}>
+            <Link component={RouterLink} to="/login" variant="body2">
+              Already have an account? Sign in
+            </Link>
+          </Box>
         </Box>
       </Paper>
     </Container>

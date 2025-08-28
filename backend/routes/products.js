@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const productController = require('../controllers/productController');
 const { protect: auth } = require('../middleware/auth'); // FIX: Use destructuring
+const upload = require('../middleware/upload');
 
 // Debug the imports
 console.log('productController.exportExcel:', typeof productController.exportExcel);
@@ -15,6 +16,8 @@ router.get('/tags', productController.getAllTags);
 router.get('/', productController.getProducts);
 router.get('/barcode/:barcode', productController.getProductByBarcode);
 router.get('/sku/:sku', productController.getProductBySku);
+router.get('/low-stock', productController.getLowStockProducts);
+router.get('/realtime-stats', productController.getRealtimeStats);
 router.get('/:id', productController.getProductById);
 
 // ==========================================
@@ -26,15 +29,15 @@ router.get('/export/csv', auth, productController.exportCSV);
 router.get('/export/excel', auth, productController.exportExcel);
 
 // CRUD operations
-router.post('/', auth, productController.createProduct);
-router.put('/:id', auth, productController.updateProduct);
+router.post('/', auth, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'back_image', maxCount: 1 }]), productController.createProduct);
+router.put('/:id', auth, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'back_image', maxCount: 1 }]), productController.updateProduct);
 router.delete('/:id', auth, productController.deleteProduct);
 
 // Image management
-router.post('/:id/images', auth, productController.uploadImages);
+router.post('/:id/images', auth, upload.array('images', 5), productController.uploadImages);
 router.delete('/:id/images/:imageType', auth, productController.deleteImage);
 
 // Data import
-router.post('/upload/csv', auth, productController.uploadCSV);
+router.post('/upload/csv', auth, upload.single('csv'), productController.uploadCSV);
 
 module.exports = router;

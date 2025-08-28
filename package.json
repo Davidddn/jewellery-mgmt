@@ -1,10 +1,21 @@
 {
+  "name": "jewellery-mgmt-root",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/material": "^7.3.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
+    "react-beautiful-dnd": "^13.1.1",
     "react-toastify": "^11.0.5"
+  },
+  "devDependencies": {
+    "workbox-cli": "^7.3.0"
   }
 }

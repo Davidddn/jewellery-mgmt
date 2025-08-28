@@ -1,14 +1,56 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Grid, Card, CardContent, Typography, Box, CircularProgress, Alert, List, ListItem, ListItemText, Avatar, Divider, TextField, Button, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogActions, Chip
+  Grid, Card, CardContent, Typography, Box, CircularProgress, Alert, List, ListItem, ListItemText, Avatar, Divider, TextField, Button, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogActions, Chip, Paper, LinearProgress, Badge, IconButton, Collapse, AlertTitle, ListItemIcon, useTheme, useMediaQuery
 } from '@mui/material';
-import { Inventory, Receipt, TrendingUp, Group, VerifiedUser, Loyalty as LoyaltyIcon } from '@mui/icons-material';
+import { 
+  Inventory, 
+  Receipt, 
+  TrendingUp, 
+  TrendingDown,
+  Group, 
+  VerifiedUser, 
+  Loyalty as LoyaltyIcon, 
+  Warning, 
+  ExpandMore, 
+  ExpandLess, 
+  Refresh,
+  AttachMoney,
+  People,
+  ShoppingCart
+} from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { reportsAPI } from '../api/reports';
 import { goldRateAPI } from '../api/goldRate';
 import { hallmarkingAPI } from '../api/hallmarking';
+import { productsAPI } from '../api/products';
+import { transactionsAPI } from '../api/transactions';
 import { useAuth } from '../contexts/useAuth';
+import { Line, Doughnut } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+} from 'chart.js';
 
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement
+);
+
+// Responsive helpers must be inside components
 // StatCard Component
 const StatCard = ({ title, value, icon, color, isCurrency = false }) => (
   <Card sx={{ height: '100%', boxShadow: 2 }}>
@@ -28,6 +70,8 @@ const StatCard = ({ title, value, icon, color, isCurrency = false }) => (
 
 // Update Rates Dialog Component
 const UpdateRatesDialog = ({ open, onClose, rates }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const queryClient = useQueryClient();
     const [purity, setPurity] = useState('24K');
     const [rate, setRate] = useState('');
@@ -68,7 +112,7 @@ const UpdateRatesDialog = ({ open, onClose, rates }) => {
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth disableRestoreFocus={false} disableEnforceFocus={false}>
+  <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile} disableRestoreFocus={false} disableEnforceFocus={false}>
             <DialogTitle>Update Gold Rates</DialogTitle>
             <DialogContent>
                 <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
@@ -78,7 +122,6 @@ const UpdateRatesDialog = ({ open, onClose, rates }) => {
                         label="Purity" 
                         onChange={(e) => setPurity(e.target.value)}
                     >
-                        <MenuItem value="24K">24K</MenuItem>
                         <MenuItem value="24K">24K</MenuItem>
                         <MenuItem value="22K">22K</MenuItem>
                         <MenuItem value="18K">18K</MenuItem>
@@ -105,9 +148,9 @@ const UpdateRatesDialog = ({ open, onClose, rates }) => {
                 <Button 
                     onClick={handleUpdate} 
                     variant="contained"
-                    disabled={updateRatesMutation.isLoading}
+                    disabled={updateRatesMutation.isPending}
                 >
-                    {updateRatesMutation.isLoading ? 'Updating...' : 'Update'}
+                    {updateRatesMutation.isPending ? 'Updating...' : 'Update'}
                 </Button>
             </DialogActions>
         </Dialog>
@@ -116,6 +159,8 @@ const UpdateRatesDialog = ({ open, onClose, rates }) => {
 
 // GoldRatesComparison Dialog Component
 const GoldRatesComparison = ({ open, onClose, liveRates, manualRates }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const purities = ['24K', '22K', '18K'];
 
     const formatRate = (rate) => {
@@ -127,7 +172,7 @@ const GoldRatesComparison = ({ open, onClose, liveRates, manualRates }) => {
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth disableRestoreFocus={false} disableEnforceFocus={false}>
+  <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile} disableRestoreFocus={false} disableEnforceFocus={false}>
             <DialogTitle>Compare Gold Rates</DialogTitle>
             <DialogContent>
                 <Grid container spacing={2}>
@@ -180,28 +225,21 @@ const GoldRatesComparison = ({ open, onClose, liveRates, manualRates }) => {
 
 // GoldRateCard with Manual Input as Popup
 const GoldRateCard = ({ goldData, isLoading, error }) => {
-    const authContext = useAuth(); // Get the whole context object
-    const { user } = authContext; // Destructure user from the context object
-    const queryClient = useQueryClient(); // Add queryClient here
+    const { user } = useAuth();
+    const queryClient = useQueryClient();
     const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
     const [comparisonDialogOpen, setComparisonDialogOpen] = useState(false);
     
-    const rates = goldData?.rates; // Extract rates from goldData
-   // const source = goldData?.source; // Extract source from goldData
-
-   // const liveRates = source === 'live-api' ? rates : null;
-   // const manualRates = (source === 'manual' || source === 'manual-fallback') ? rates : null;
+    const rates = goldData?.rates;
 
     const resetRatesMutation = useMutation({
         mutationFn: goldRateAPI.resetGoldRates,
         onSuccess: (data) => {
-            console.log("Reset successful:", data); // Add this line
+            console.log("Reset successful:", data);
             queryClient.invalidateQueries(['goldRate']);
-            // Optionally show a success message
         },
         onError: (err) => {
-            console.error("Failed to reset rates:", err); // Add this line
-            // Optionally show an error message
+            console.error("Failed to reset rates:", err);
         }
     });
 
@@ -305,9 +343,9 @@ const GoldRateCard = ({ goldData, isLoading, error }) => {
                             variant="outlined" 
                             color="secondary"
                             onClick={() => resetRatesMutation.mutate()}
-                            disabled={resetRatesMutation.isLoading}
+                            disabled={resetRatesMutation.isPending}
                         >
-                            {resetRatesMutation.isLoading ? 'Resetting...' : 'Reset to Live Rates'}
+                            {resetRatesMutation.isPending ? 'Resetting...' : 'Reset to Live Rates'}
                         </Button>
                     )}
                 </Box>
@@ -327,24 +365,112 @@ const GoldRateCard = ({ goldData, isLoading, error }) => {
             />
         </Card>
     );
-}
-
+};
 
 const Dashboard = () => {
-  const { data, isLoading, error } = useQuery({
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [expandedSections, setExpandedSections] = React.useState({
+    analytics: !isMobile,
+    recent: !isMobile,
+    alerts: true // Always show alerts expanded
+  });
+
+
+  // Queries with debug logging
+  const { data: dashboardData, isLoading, error, refetch: refetchDashboard } = useQuery({
     queryKey: ['dailySales'],
     queryFn: () => reportsAPI.getDailySales(new Date().toISOString().split('T')[0]),
+    onSuccess: (data) => {
+      console.log('Dashboard API Response:', data);
+    },
+    onError: (err) => {
+      console.error('Dashboard API Error:', err);
+    }
   });
 
   const { data: goldData, isLoading: isGoldLoading, error: goldError } = useQuery({
     queryKey: ['goldRate'],
     queryFn: goldRateAPI.getLatestGoldRate,
+    onSuccess: (data) => {
+      console.log('Gold Rate API Response:', data);
+    },
+    onError: (err) => {
+      console.error('Gold Rate API Error:', err);
+    }
   });
 
-  // Fetch hallmarking data
-  const { data: hallmarkingData, isLoading: isHallmarkingLoading, error: hallmarkingError } = useQuery({
+  const { isLoading: isHallmarkingLoading } = useQuery({
     queryKey: ['allHallmarking'],
     queryFn: hallmarkingAPI.getHallmarking,
+    onError: (err) => {
+      console.error('Hallmarking API Error:', err);
+    }
+  });
+
+  const { data: lowStockProducts, isLoading: loadingLowStock } = useQuery({
+    queryKey: ['low-stock-products'],
+    queryFn: () => productsAPI.getLowStockProducts?.(10) || Promise.resolve({ products: [] }),
+    refetchInterval: 30000,
+    retry: 1,
+    onError: (err) => {
+      console.error('Low Stock Products API Error:', err);
+    }
+  });
+
+  const { data: recentTransactions, isLoading: loadingTransactions } = useQuery({
+    queryKey: ['recent-transactions'],
+    queryFn: () => transactionsAPI.getRecentTransactions?.(5) || Promise.resolve({ transactions: [] }),
+    refetchInterval: 10000,
+    retry: 1,
+    onError: (err) => {
+      console.error('Recent Transactions API Error:', err);
+    }
+  });
+
+  const { data: salesAnalyticsRaw } = useQuery({
+    queryKey: ['sales-analytics'],
+    queryFn: () => reportsAPI.getSalesAnalytics(),
+    retry: 1,
+    onSuccess: (data) => {
+      console.log('Sales Analytics API Response:', data);
+    },
+    onError: (err) => {
+      console.error('Sales Analytics API Error:', err);
+    }
+  });
+
+  // Transform backend response to Chart.js format
+  const salesAnalytics = React.useMemo(() => {
+    const dailySales = salesAnalyticsRaw?.report?.dailySales || [];
+    if (!Array.isArray(dailySales) || dailySales.length === 0) {
+      return { labels: [], datasets: [] };
+    }
+    return {
+      labels: dailySales.map((d) => d.date),
+      datasets: [
+        {
+          label: 'Total Sales',
+          data: dailySales.map((d) => d.total_sales),
+          fill: false,
+          borderColor: '#1976d2',
+          backgroundColor: '#1976d2',
+          tension: 0.3,
+        },
+      ],
+    };
+  }, [salesAnalyticsRaw]);
+
+  const { data: inventoryAnalytics } = useQuery({
+    queryKey: ['inventory-analytics'],
+    queryFn: () => reportsAPI.getInventoryAnalytics?.() || Promise.resolve({ data: null }),
+    retry: 1,
+    onSuccess: (data) => {
+      console.log('Inventory Analytics API Response:', data);
+    },
+    onError: (err) => {
+      console.error('Inventory Analytics API Error:', err);
+    }
   });
 
   if (isLoading || isHallmarkingLoading) {
@@ -355,117 +481,464 @@ const Dashboard = () => {
     return <Alert severity="error">Failed to load dashboard data: {error.message}</Alert>;
   }
 
-  const dashboardData = data?.dashboard || {};
-  const recentHallmarking = hallmarkingData?.hallmarking || [];
+  // Fallback data
+  const stats = dashboardData?.data || {
+    todaySales: 0,
+    todayTransactions: 0,
+    totalCustomers: 0,
+    totalProducts: 0,
+    totalRevenue: 0,
+    monthlyGrowth: 0
+  };
+
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
+  const handleRefresh = () => {
+    refetchDashboard();
+  };
+
+  // Stat cards data
+  const statCards = [
+    {
+      title: 'Today\'s Sales',
+      value: `₹${Number(stats.todaySales || 0).toLocaleString('en-IN')}`,
+      icon: <AttachMoney />,
+      color: 'success',
+      trend: stats.salesGrowth || 0,
+    },
+    {
+      title: 'Transactions',
+      value: stats.todayTransactions || 0,
+      icon: <Receipt />,
+      color: 'info',
+      trend: stats.transactionGrowth || 0,
+    },
+    {
+      title: 'Total Customers',
+      value: stats.totalCustomers || 0,
+      icon: <People />,
+      color: 'primary',
+      trend: stats.customerGrowth || 0,
+    },
+    {
+      title: 'Products',
+      value: stats.totalProducts || 0,
+      icon: <ShoppingCart />,
+      color: 'warning',
+      trend: stats.productGrowth || 0,
+    },
+  ];
 
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold' }}>Dashboard</Typography>
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}><StatCard title="Today's Revenue" value={dashboardData.revenue || 0} icon={<TrendingUp />} color="success.main" isCurrency={true} /></Grid>
-        <Grid item xs={12} sm={6} md={3}><StatCard title="Today's Transactions" value={dashboardData.transactionCount || 0} icon={<Receipt />} color="primary.main" /></Grid>
-        <Grid item xs={12} sm={6} md={3}><StatCard title="Low Stock Items" value={dashboardData.lowStockProducts?.length || 0} icon={<Inventory />} color="warning.main" /></Grid>
-        <Grid item xs={12} sm={6} md={3}><StatCard title="Total Customers" value={dashboardData.totalCustomers || 0} icon={<Group />} color="secondary.main" /></Grid>
-      </Grid>
-      <Grid container spacing={3}>
-        <Grid item xs={12} lg={8}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>Top Selling Products Today</Typography>
-              <List>
-                {dashboardData.topSelling?.length > 0 ? (
-                  dashboardData.topSelling.map((item, idx) => (
-                    <ListItem key={idx} disableGutters divider><ListItemText primary={item.product?.name || `Product ID: ${item.product_id}`} secondary={`Sold: ${item.total_sold}`} /></ListItem>
-                  ))
-                ) : (
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>No sales data for today.</Typography>
-                )}
-              </List>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} lg={4}>
-            <GoldRateCard goldData={goldData} isLoading={isGoldLoading} error={goldError?.message} />
-            <Card sx={{ mt: 3 }}>
-                <CardContent>
-                    <Typography variant="h6" gutterBottom>Low Stock Alerts</Typography>
-                    {dashboardData.lowStockProducts?.length > 0 ? (
-                        <List>
-                            {dashboardData.lowStockProducts.map((product) => (
-                                <ListItem key={product.id} disableGutters divider>
-                                    <ListItemText 
-                                      primary={product.name} 
-                                      secondary={`Current Stock: ${product.stock_quantity}`} 
-                                    />
-                                </ListItem>
-                            ))}
-                        </List>
-                    ) : (
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                          All products are well-stocked.
+    <Box sx={{ width: '100%', p: { xs: 1, sm: 2, md: 3 } }}>
+      {/* Header */}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: { xs: 'flex-start', sm: 'center' },
+        flexDirection: { xs: 'column', sm: 'row' },
+        mb: 3,
+        gap: { xs: 1, sm: 0 }
+      }}>
+        <Typography 
+          variant={isMobile ? "h5" : "h4"} 
+          fontWeight="bold"
+          sx={{ fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' } }}
+        >
+          Dashboard
+        </Typography>
+        <IconButton onClick={handleRefresh} color="primary">
+          <Refresh />
+        </IconButton>
+      </Box>
+
+      {/* Stats Cards */}
+      <Grid container spacing={{ xs: 2, md: 3 }} sx={{ mb: 3 }}>
+        {statCards.map((card, index) => (
+          <Grid item xs={6} sm={6} md={3} key={index}>
+            <Card 
+              elevation={isMobile ? 1 : 2}
+              sx={{ 
+                height: '100%',
+                transition: 'transform 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-2px)'
+                }
+              }}
+            >
+              <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                  <Box sx={{ flexGrow: 1 }}>
+                    <Typography 
+                      variant="body2" 
+                      color="text.secondary" 
+                      gutterBottom
+                      sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                    >
+                      {card.title}
+                    </Typography>
+                    <Typography 
+                      variant={isMobile ? "h6" : "h5"} 
+                      fontWeight="bold"
+                      sx={{ fontSize: { xs: '1rem', sm: '1.25rem', md: '1.5rem' } }}
+                    >
+                      {card.value}
+                    </Typography>
+                    {card.trend !== 0 && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                        {card.trend > 0 ? (
+                          <TrendingUp color="success" sx={{ fontSize: '1rem' }} />
+                        ) : (
+                          <TrendingDown color="error" sx={{ fontSize: '1rem' }} />
+                        )}
+                        <Typography 
+                          variant="caption" 
+                          color={card.trend > 0 ? 'success.main' : 'error.main'}
+                          sx={{ ml: 0.5, fontSize: { xs: '0.6rem', sm: '0.75rem' } }}
+                        >
+                          {Math.abs(card.trend)}%
                         </Typography>
+                      </Box>
                     )}
-                </CardContent>
+                  </Box>
+                  <Box 
+                    sx={{ 
+                      color: `${card.color}.main`,
+                      fontSize: { xs: '1.5rem', sm: '2rem' }
+                    }}
+                  >
+                    {card.icon}
+                  </Box>
+                </Box>
+              </CardContent>
             </Card>
+          </Grid>
+        ))}
+      </Grid>
+
+      {/* Gold Rate Card */}
+      <Grid container spacing={{ xs: 2, md: 3 }} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={6}>
+          <GoldRateCard 
+            goldData={goldData} 
+            isLoading={isGoldLoading} 
+            error={goldError?.message} 
+          />
         </Grid>
-      {/* Hallmarking Section */}
-        <Grid item xs={12} lg={6}>
-          <Card sx={{ height: '100%', mt: 3 }}>
-            <CardContent>
-              <Box display="flex" alignItems="center" mb={2}>
-                <Avatar sx={{ bgcolor: 'info.main', mr: 2 }}><VerifiedUser /></Avatar>
-                <Typography variant="h6">Recent Hallmarking Records</Typography>
+      </Grid>
+
+      {/* Low Stock Alerts */}
+      <Paper 
+        elevation={isMobile ? 1 : 2} 
+        sx={{ mb: 3, overflow: 'hidden' }}
+      >
+        <Box sx={{ 
+          p: { xs: 2, sm: 3 }, 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          cursor: isMobile ? 'pointer' : 'default'
+        }}
+        onClick={isMobile ? () => toggleSection('alerts') : undefined}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Warning color="warning" />
+            <Typography variant="h6" fontWeight="600">
+              Stock Alerts
+            </Typography>
+            {lowStockProducts?.products?.length > 0 && (
+              <Chip 
+                label={lowStockProducts.products.length} 
+                color="warning" 
+                size="small" 
+              />
+            )}
+          </Box>
+          {isMobile && (
+            <IconButton size="small">
+              {expandedSections.alerts ? <ExpandLess /> : <ExpandMore />}
+            </IconButton>
+          )}
+        </Box>
+        
+        <Collapse in={expandedSections.alerts}>
+          <Divider />
+          <Box sx={{ p: { xs: 2, sm: 3 }, pt: { xs: 1, sm: 2 } }}>
+            {loadingLowStock ? (
+              <LinearProgress />
+            ) : lowStockProducts?.products?.length > 0 ? (
+              <List dense={isMobile}>
+                {lowStockProducts.products.slice(0, isMobile ? 3 : 5).map((product, index) => (
+                  <ListItem 
+                    key={product.id} 
+                    divider={index < (isMobile ? 2 : 4)}
+                    sx={{ px: { xs: 0, sm: 1 } }}
+                  >
+                    <ListItemIcon>
+                      <Inventory color="warning" />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={product.name}
+                      secondary={
+                        <span>
+                          <Typography variant="caption" color="text.secondary" component="span">
+                            Stock: {product.stock_quantity} | SKU: {product.sku}
+                          </Typography>
+                          <Box component="span" sx={{ display: 'block' }}>
+                            <LinearProgress
+                              variant="determinate"
+                              value={(product.stock_quantity / 50) * 100}
+                              sx={{ mt: 0.5, height: 4, borderRadius: 2 }}
+                              color={product.stock_quantity <= 5 ? 'error' : 'warning'}
+                            />
+                          </Box>
+                        </span>
+                      }
+                    />
+                    <Chip
+                      label={`${product.stock_quantity} left`}
+                      color={product.stock_quantity <= 5 ? 'error' : 'warning'}
+                      size="small"
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            ) : (
+              <Alert severity="success">
+                <AlertTitle>All Stock Levels Good</AlertTitle>
+                No products are currently running low on stock.
+              </Alert>
+            )}
+          </Box>
+        </Collapse>
+      </Paper>
+
+      {/* Charts and Recent Activity */}
+      <Grid container spacing={{ xs: 2, md: 3 }}>
+        {/* Sales Analytics Chart */}
+        <Grid item xs={12} lg={8}>
+          <Paper elevation={isMobile ? 1 : 2} sx={{ overflow: 'hidden' }}>
+            <Box sx={{ 
+              p: { xs: 2, sm: 3 }, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              cursor: isMobile ? 'pointer' : 'default'
+            }}
+            onClick={isMobile ? () => toggleSection('analytics') : undefined}
+            >
+              <Typography variant="h6" fontWeight="600">
+                Sales Analytics
+              </Typography>
+              {isMobile && (
+                <IconButton size="small">
+                  {expandedSections.analytics ? <ExpandLess /> : <ExpandMore />}
+                </IconButton>
+              )}
+            </Box>
+            
+            <Collapse in={expandedSections.analytics}>
+              <Divider />
+              <Box sx={{ p: { xs: 2, sm: 3 }, pt: { xs: 1, sm: 2 } }}>
+                <Box sx={{ height: { xs: 250, sm: 300, md: 350 } }}>
+                  <Line
+                    data={salesAnalytics}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          display: !isMobile,
+                          position: 'top',
+                        },
+                        title: {
+                          display: false,
+                        },
+                      },
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          ticks: {
+                            callback: function (value) {
+                              return '₹' + value.toLocaleString('en-IN');
+                            },
+                            font: {
+                              size: isMobile ? 10 : 12,
+                            },
+                          },
+                        },
+                        x: {
+                          ticks: {
+                            font: {
+                              size: isMobile ? 10 : 12,
+                            },
+                          },
+                        },
+                      },
+                      elements: {
+                        point: {
+                          radius: isMobile ? 2 : 3,
+                        },
+                      },
+                    }}
+                  />
+                  {(!salesAnalytics?.data || !Array.isArray(salesAnalytics.data.datasets) || salesAnalytics.data.datasets.length === 0) && (
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      <AlertTitle>No Sales Data</AlertTitle>
+                      Sales analytics will appear here once you have transaction data.
+                    </Alert>
+                  )}
+                </Box>
               </Box>
-              {isHallmarkingLoading && <CircularProgress size={24} />}
-              {hallmarkingError && <Alert severity="error">Failed to load hallmarking data: {hallmarkingError.message}</Alert>}
-              {!isHallmarkingLoading && !hallmarkingError && (
-                <List>
-                  {recentHallmarking.length > 0 ? (
-                    recentHallmarking.slice(0, 5).map((record) => (
-                      <ListItem key={record.id} disableGutters divider>
-                        <ListItemText 
-                          primary={`Hallmark No: ${record.hallmark_number}`}
+            </Collapse>
+          </Paper>
+        </Grid>
+
+        {/* Inventory Distribution */}
+        <Grid item xs={12} lg={4}>
+          <Paper elevation={isMobile ? 1 : 2} sx={{ height: '100%', overflow: 'hidden' }}>
+            <Box sx={{ p: { xs: 2, sm: 3 } }}>
+              <Typography variant="h6" fontWeight="600" sx={{ mb: 2 }}>
+                Inventory
+              </Typography>
+              <Box sx={{ height: { xs: 200, sm: 250, lg: 280 } }}>
+                <Doughnut
+                  data={
+                    inventoryAnalytics?.data && Array.isArray(inventoryAnalytics.data.datasets)
+                      ? inventoryAnalytics.data
+                      : { labels: [], datasets: [] }
+                  }
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: isMobile ? 'bottom' : 'right',
+                        labels: {
+                          boxWidth: isMobile ? 12 : 15,
+                          font: {
+                            size: isMobile ? 10 : 12,
+                          },
+                        },
+                      },
+                    },
+                  }}
+                />
+                {(!inventoryAnalytics?.data || !Array.isArray(inventoryAnalytics.data.datasets) || inventoryAnalytics.data.datasets.length === 0) && (
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    <AlertTitle>No Inventory Data</AlertTitle>
+                    Add products to see inventory distribution.
+                  </Alert>
+                )}
+              </Box>
+            </Box>
+          </Paper>
+        </Grid>
+
+        {/* Recent Transactions */}
+        <Grid item xs={12}>
+          <Paper elevation={isMobile ? 1 : 2} sx={{ overflow: 'hidden' }}>
+            <Box sx={{ 
+              p: { xs: 2, sm: 3 }, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              cursor: isMobile ? 'pointer' : 'default'
+            }}
+            onClick={isMobile ? () => toggleSection('recent') : undefined}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ShoppingCart color="primary" />
+                <Typography variant="h6" fontWeight="600">
+                  Recent Transactions
+                </Typography>
+                {recentTransactions?.transactions?.length > 0 && (
+                  <Badge 
+                    badgeContent={recentTransactions.transactions.length} 
+                    color="primary" 
+                  />
+                )}
+              </Box>
+              {isMobile && (
+                <IconButton size="small">
+                  {expandedSections.recent ? <ExpandLess /> : <ExpandMore />}
+                </IconButton>
+              )}
+            </Box>
+            
+            <Collapse in={expandedSections.recent}>
+              <Divider />
+              <Box sx={{ p: { xs: 2, sm: 3 }, pt: { xs: 1, sm: 2 } }}>
+                {loadingTransactions ? (
+                  <LinearProgress />
+                ) : recentTransactions?.transactions?.length > 0 ? (
+                  <List dense={isMobile}>
+                    {recentTransactions.transactions.map((transaction, index) => (
+                      <ListItem 
+                        key={transaction.id} 
+                        divider={index < recentTransactions.transactions.length - 1}
+                        sx={{ 
+                          px: { xs: 0, sm: 1 },
+                          flexDirection: { xs: 'column', sm: 'row' },
+                          alignItems: { xs: 'flex-start', sm: 'center' }
+                        }}
+                      >
+                        <ListItemText
+                          primary={
+                            <span>
+                              <Box sx={{ 
+                                display: 'flex', 
+                                justifyContent: 'space-between', 
+                                alignItems: { xs: 'flex-start', sm: 'center' },
+                                flexDirection: { xs: 'column', sm: 'row' },
+                                width: '100%'
+                              }}>
+                                <Typography 
+                                  variant="body2" 
+                                  fontWeight="500"
+                                  component="span"
+                                  sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}
+                                >
+                                  Transaction #{transaction.id}
+                                </Typography>
+                                <Chip
+                                  label={`₹${Number(transaction.total_amount || 0).toLocaleString('en-IN')}`}
+                                  color="success"
+                                  size={isMobile ? "small" : "medium"}
+                                  sx={{ mt: { xs: 0.5, sm: 0 } }}
+                                />
+                              </Box>
+                            </span>
+                          }
                           secondary={
-                            <React.Fragment>
-                              <Typography component="span" variant="body2" color="text.primary">
-                                {record.product?.name} ({record.product?.purity})
-                              </Typography>
-                              {` — Certified: ${new Date(record.certification_date).toLocaleDateString()}`}
-                            </React.Fragment>
+                            <Typography 
+                              variant="caption" 
+                              color="text.secondary"
+                              component="span"
+                              sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}
+                            >
+                              {new Date(transaction.createdAt).toLocaleString()} | 
+                              Customer: {transaction.customer_name || 'Walk-in'}
+                            </Typography>
                           }
                         />
                       </ListItem>
-                    ))
-                  ) : (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                      No recent hallmarking records found.
-                    </Typography>
-                  )}
-                </List>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Loyalty Program Section (Placeholder) */}
-        <Grid item xs={12} lg={6}>
-          <Card sx={{ height: '100%', mt: 3 }}>
-            <CardContent>
-              <Box display="flex" alignItems="center" mb={2}>
-                <Avatar sx={{ bgcolor: 'secondary.main', mr: 2 }}><LoyaltyIcon /></Avatar>
-                <Typography variant="h6">Loyalty Program Overview</Typography>
+                    ))}
+                  </List>
+                ) : (
+                  <Alert severity="info">
+                    <AlertTitle>No Recent Transactions</AlertTitle>
+                    Recent transaction activity will appear here.
+                  </Alert>
+                )}
               </Box>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-                Manage and view customer loyalty details.
-              </Typography>
-              <Button variant="contained" color="secondary" href="/loyalty" disabled>
-                Go to Loyalty Page (Coming Soon)
-              </Button>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                For detailed loyalty statistics, a backend summary endpoint would be beneficial.
-              </Typography>
-            </CardContent>
-          </Card>
+            </Collapse>
+          </Paper>
         </Grid>
       </Grid>
     </Box>

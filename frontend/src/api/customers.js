@@ -111,12 +111,8 @@ export const customersAPI = {
     return response.data;
   },
 
-  uploadCSV: async (formData) => {
-    const response = await api.post('/customers/upload/csv', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
-  },
+  importCustomers: (formData) => 
+    api.post('/imports/customers', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data),
 };

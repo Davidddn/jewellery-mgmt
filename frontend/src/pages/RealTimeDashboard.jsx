@@ -1,0 +1,443 @@
+import React, { useState, useEffect} from 'react';
+import {
+  Box,
+  Paper,
+  Typography,
+  Grid,
+  Card,
+  CardContent,
+  Chip,
+  Badge,
+  useTheme,
+  useMediaQuery,
+  Alert,
+  CircularProgress,
+  IconButton,
+  Tooltip
+} from '@mui/material';
+import {
+  Refresh,
+  Wifi,
+  WifiOff,
+  Notifications,
+  TrendingUp,
+  TrendingDown,
+  AttachMoney,
+  ShoppingCart,
+  Inventory,
+  People,
+  Timeline
+} from '@mui/icons-material';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  AreaChart,
+  Area
+} from 'recharts';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { transactionsAPI } from '../api/transactions';
+import { productsAPI } from '../api/products';
+import { usersAPI } from '../api/users';
+import { useNotifications } from '../hooks/useNotifications';
+
+// Simulated WebSocket hook (replace with actual WebSocket implementation)
+const useRealTimeData = (endpoint, refetchInterval = 5000) => {
+  const [isConnected] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState(new Date());
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLastUpdate(new Date());
+    }, refetchInterval);
+    
+    return () => {
+      clearInterval(interval);
+    };
+  }, [refetchInterval]);
+  
+  return { isConnected, lastUpdate };
+};
+
+const formatCurrency = (value) => `₹${Number(value).toLocaleString('en-IN')}`;
+
+const RealTimeDashboard = () => {
+  console.log("RealTimeDashboard mounted");
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const queryClient = useQueryClient();
+  const { showSnackbar } = useNotifications();
+  
+  const [realtimeStats, setRealtimeStats] = useState({
+    todaysSales: 0,
+    todaysTransactions: 0,
+    activeUsers: 0,
+    lowStockAlerts: 0,
+    recentTransactions: []
+  });
+  const [salesTimelineData, setSalesTimelineData] = useState([]);
+
+  // Real-time connection status
+  const { isConnected, lastUpdate } = useRealTimeData('/api/realtime', 10000);
+
+  // Data queries with short refetch intervals for near real-time updates
+  const { isLoading: transactionsLoading } = useQuery({
+    queryKey: ['realtime-transaction-stats'],
+    queryFn: transactionsAPI.getRealtimeStats,
+    refetchInterval: 10000, // Refetch every 10 seconds
+    onSuccess: (data) => {
+      console.log('Realtime Transactions API Response:', data);
+      if (data?.data) {
+        setRealtimeStats(prev => ({
+          ...prev,
+          todaysSales: data.data.todaysSales,
+          todaysTransactions: data.data.todaysTransactions,
+          recentTransactions: data.data.recentTransactions
+        }));
+      }
+    }
+  });
+
+  const { isLoading: productsLoading } = useQuery({
+    queryKey: ['realtime-product-stats'],
+    queryFn: productsAPI.getRealtimeStats,
+    refetchInterval: 30000, // Refetch every 30 seconds
+    onSuccess: (data) => {
+      console.log('Realtime Products API Response:', data);
+      if (data?.data) {
+        setRealtimeStats(prev => {
+          const newStats = {
+            ...prev,
+            lowStockAlerts: data.data.lowStockAlerts
+          };
+          // Show notification for new low stock items
+          if (data.data.lowStockAlerts > prev.lowStockAlerts && prev.lowStockAlerts > 0) {
+            showSnackbar(`${data.data.lowStockAlerts - prev.lowStockAlerts} new low stock alerts!`, 'warning');
+          }
+          return newStats;
+        });
+      }
+    }
+  });
+
+  const { isLoading: usersLoading } = useQuery({
+    queryKey: ['realtime-user-stats'],
+    queryFn: usersAPI.getActiveUserCount,
+    refetchInterval: 60000, // Refetch every 60 seconds
+    onSuccess: (data) => {
+      console.log('Realtime Users API Response:', data);
+      if (data?.data) {
+        setRealtimeStats(prev => ({
+          ...prev,
+          activeUsers: data.data.activeUsers
+        }));
+      }
+    }
+  });
+
+  const { isLoading: salesTimelineLoading } = useQuery({
+    queryKey: ['sales-timeline'],
+    queryFn: transactionsAPI.getSalesTimeline,
+    refetchInterval: 60000, // Refetch every 60 seconds
+    onSuccess: (data) => {
+      console.log('Sales Timeline API Response:', data);
+      if (data?.data) {
+        const formattedData = data.data.map(item => ({
+          hour: new Date(item.hour).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          sales: parseFloat(item.sales)
+        }));
+        setSalesTimelineData(formattedData);
+      }
+    }
+  });
+
+  const handleManualRefresh = () => {
+    queryClient.invalidateQueries(['realtime-transaction-stats']);
+    queryClient.invalidateQueries(['realtime-product-stats']);
+    queryClient.invalidateQueries(['realtime-user-stats']);
+    queryClient.invalidateQueries(['sales-timeline']);
+    showSnackbar('Data refreshed successfully!', 'success');
+  };
+
+  const getConnectionStatus = () => {
+    if (isConnected) {
+      return {
+        icon: <Wifi color="success" />,
+        text: 'Connected',
+        color: 'success'
+      };
+    }
+    return {
+      icon: <WifiOff color="error" />,
+      text: 'Disconnected',
+      color: 'error'
+    };
+  };
+
+  const connectionStatus = getConnectionStatus();
+
+  if (transactionsLoading || productsLoading || usersLoading || salesTimelineLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ p: { xs: 1, md: 3 } }}>
+      {/* Header with real-time status */}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: { xs: 'flex-start', md: 'center' },
+        flexDirection: { xs: 'column', md: 'row' },
+        mb: 3,
+        gap: { xs: 2, md: 0 }
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Timeline color="primary" sx={{ fontSize: { xs: 28, md: 32 } }} />
+          <Typography variant={isMobile ? "h5" : "h4"} sx={{ fontWeight: 'bold' }}>
+            Real-Time Dashboard
+          </Typography>
+          <Chip 
+            icon={connectionStatus.icon}
+            label={connectionStatus.text}
+            color={connectionStatus.color}
+            variant="outlined"
+            size="small"
+          />
+        </Box>
+        
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="caption" color="text.secondary">
+            Last updated: {lastUpdate.toLocaleTimeString()}
+          </Typography>
+          <Tooltip title="Refresh Data">
+            <IconButton onClick={handleManualRefresh} color="primary">
+              <Refresh />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      </Box>
+
+      {/* Real-time KPI Cards */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card elevation={2} sx={{ 
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white'
+          }}>
+            <CardContent sx={{ textAlign: 'center', py: 2 }}>
+              <AttachMoney sx={{ fontSize: 32, mb: 1 }} />
+              <Typography variant="h6" sx={{ fontSize: { xs: '1rem', md: '1.25rem' } }}>
+                {formatCurrency(realtimeStats.todaysSales)}
+              </Typography>
+              <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                Today's Sales
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mt: 1 }}>
+                <TrendingUp sx={{ fontSize: 16 }} />
+                <Typography variant="caption" sx={{ ml: 0.5 }}>
+                  Live
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} sm={6} md={3}>
+          <Card elevation={2} sx={{ 
+            background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            color: 'white'
+          }}>
+            <CardContent sx={{ textAlign: 'center', py: 2 }}>
+              <ShoppingCart sx={{ fontSize: 32, mb: 1 }} />
+              <Typography variant="h6" sx={{ fontSize: { xs: '1rem', md: '1.25rem' } }}>
+                {realtimeStats.todaysTransactions}
+              </Typography>
+              <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                Today's Orders
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mt: 1 }}>
+                <TrendingUp sx={{ fontSize: 16 }} />
+                <Typography variant="caption" sx={{ ml: 0.5 }}>
+                  Live
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} sm={6} md={3}>
+          <Card elevation={2} sx={{ 
+            background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+            color: 'white'
+          }}>
+            <CardContent sx={{ textAlign: 'center', py: 2 }}>
+              <People sx={{ fontSize: 32, mb: 1 }} />
+              <Typography variant="h6" sx={{ fontSize: { xs: '1rem', md: '1.25rem' } }}>
+                {realtimeStats.activeUsers}
+              </Typography>
+              <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                Active Users
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mt: 1 }}>
+                <Badge variant="dot" color="success">
+                  <Typography variant="caption">
+                    Online
+                  </Typography>
+                </Badge>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={12} sm={6} md={3}>
+          <Card elevation={2} sx={{ 
+            background: realtimeStats.lowStockAlerts > 0 
+              ? 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)'
+              : 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+            color: realtimeStats.lowStockAlerts > 0 ? 'white' : 'text.primary'
+          }}>
+            <CardContent sx={{ textAlign: 'center', py: 2 }}>
+              <Badge badgeContent={realtimeStats.lowStockAlerts} color="error">
+                <Inventory sx={{ fontSize: 32, mb: 1 }} />
+              </Badge>
+              <Typography variant="h6" sx={{ fontSize: { xs: '1rem', md: '1.25rem' } }}>
+                {realtimeStats.lowStockAlerts}
+              </Typography>
+              <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                Stock Alerts
+              </Typography>
+              {realtimeStats.lowStockAlerts > 0 && (
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mt: 1 }}>
+                  <Notifications sx={{ fontSize: 16 }} />
+                  <Typography variant="caption" sx={{ ml: 0.5 }}>
+                    Action Required
+                  </Typography>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={3}>
+        {/* Real-time Sales Chart */}
+        <Grid item xs={12} lg={8}>
+          <Card elevation={2}>
+            <CardContent>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Today's Sales Timeline (Hourly)
+              </Typography>
+              <Box sx={{ height: 300, width: '100%' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={salesTimelineData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="hour" 
+                      fontSize={isMobile ? 10 : 12}
+                    />
+                    <YAxis 
+                      tickFormatter={formatCurrency}
+                      fontSize={isMobile ? 10 : 12}
+                    />
+                    <RechartsTooltip 
+                      formatter={(value) => formatCurrency(value)}
+                      labelFormatter={(label) => `Time: ${label}`}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="sales" 
+                      stroke="#8884d8" 
+                      fill="#8884d8"
+                      fillOpacity={0.6}
+                      name="Sales"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Recent Transactions */}
+        <Grid item xs={12} lg={4}>
+          <Card elevation={2}>
+            <CardContent>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Recent Transactions
+              </Typography>
+              <Box sx={{ height: 300, overflow: 'auto' }}>
+                {realtimeStats.recentTransactions.length === 0 ? (
+                  <Alert severity="info">No recent transactions</Alert>
+                ) : (
+                  realtimeStats.recentTransactions.map((transaction) => (
+                    <Box 
+                      key={transaction.id} 
+                      sx={{ 
+                        mb: 2, 
+                        p: 2, 
+                        bgcolor: 'grey.50', 
+                        borderRadius: 1,
+                        border: '1px solid',
+                        borderColor: 'grey.200'
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                        <Typography variant="subtitle2">
+                          #{transaction.id}
+                        </Typography>
+                        <Chip 
+                          label={formatCurrency(transaction.final_amount || 0)}
+                          color="primary"
+                          size="small"
+                        />
+                      </Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Customer: {transaction.customer?.name || 'Walk-in'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {new Date(transaction.created_at).toLocaleTimeString()}
+                      </Typography>
+                      <Box sx={{ mt: 1 }}>
+                        <Chip 
+                          label="NEW"
+                          color="success"
+                          size="small"
+                          sx={{ fontSize: '0.625rem' }}
+                        />
+                      </Box>
+                    </Box>
+                  ))
+                )}
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Connection Status Alert */}
+      {!isConnected && (
+        <Alert 
+          severity="warning" 
+          sx={{ mt: 2 }}
+          action={
+            <IconButton onClick={handleManualRefresh} color="inherit" size="small">
+              <Refresh />
+            </IconButton>
+          }
+        >
+          Real-time connection lost. Data may not be current. Click refresh to update manually.
+        </Alert>
+      )}
+    </Box>
+  );
+};
+
+export default RealTimeDashboard;

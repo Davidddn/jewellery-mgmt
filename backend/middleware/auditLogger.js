@@ -3,29 +3,49 @@ const db = require('../models');
 module.exports = async (req, res, next) => {
   // Store original send method
   const originalSend = res.send;
-  
-  // Override send method to capture response
+
+  // For update, fetch old value before response
+  let oldValue = null;
+  if (req.method === 'PUT' && req.params.id && req.baseUrl) {
+    const entityType = req.baseUrl.replace('/api/', '').replace(/s$/, '');
+    if (db[entityType.charAt(0).toUpperCase() + entityType.slice(1)]) {
+      try {
+        oldValue = await db[entityType.charAt(0).toUpperCase() + entityType.slice(1)].findByPk(req.params.id);
+      } catch {}
+    }
+  }
+
   res.send = function(data) {
-    // Restore original send
     res.send = originalSend;
-    
-    // Log the action after response is sent
+
     if (['POST', 'PUT', 'DELETE'].includes(req.method) && req.user) {
+      const entityType = req.baseUrl.replace('/api/', '').replace(/s$/, '');
+      let entityId = req.body.id || req.params.id || null;
+      let details = {};
+      if (req.method === 'PUT') {
+        details = {
+          oldValue: oldValue ? oldValue.toJSON() : null,
+          newValue: req.body
+        };
+      } else if (req.method === 'POST') {
+        details = { newValue: req.body };
+      } else if (req.method === 'DELETE') {
+        details = { deletedId: entityId };
+      }
       db.AuditLog.create({
-        user_id: req.user.id,
+        userId: req.user.id,
         action: `${req.method} ${req.originalUrl}`,
-        entity: req.baseUrl.replace('/api/', ''),
-        entity_id: req.body.id || req.params.id || 'unknown',
-        changes: req.body,
+        entityType,
+        entityId,
+        details,
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
         timestamp: new Date()
       }).catch(err => {
         console.error('Audit log error:', err);
       });
     }
-    
-    // Call original send
     return originalSend.call(this, data);
   };
-  
   next();
-}; 
+};

@@ -32,6 +32,16 @@ export const transactionsAPI = {
     return response.data;
   },
 
+  getRecentTransactions: async (limit = 5) => {
+    const response = await api.get('/transactions/recent', { params: { limit } });
+    return response.data;
+  },
+
+  getRealtimeStats: async () => {
+    const response = await api.get('/transactions/realtime-stats');
+    return response.data;
+  },
+
   // Invoice functions (remove /api/ since config adds it)
   getInvoice: async (transactionId, format = 'pdf') => {
     try {
@@ -87,6 +97,35 @@ export const transactionsAPI = {
       console.error('API Error in downloadCSV:', error);
       throw error;
     }
+  },
+
+  // Export all transactions as CSV
+  exportTransactions: async () => {
+    try {
+      const response = await api.get('/transactions/export/csv', {
+        responseType: 'blob'
+      });
+      return response.data;
+    } catch (error) {
+      console.error('API Error in exportTransactions:', error);
+      throw error;
+    }
+  },
+
+  // Import transactions from CSV
+  uploadCSV: async (formData) => {
+    const response = await api.post('/imports/transactions', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  // Get sales timeline for dashboard
+  getSalesTimeline: async () => {
+    const response = await api.get('/transactions/sales-timeline');
+    return response.data;
   },
 };
 

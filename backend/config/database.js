@@ -36,7 +36,7 @@ const testSqliteConnection = async () => {
  */
 const syncDatabase = async () => {
   try {
-    await sequelize.sync({ alter: true });
+  await sequelize.sync({ force: true }); // TEMP: force drop and recreate all tables for schema fix
     logger.info('Database synchronized successfully.');
   } catch (error) {
     logger.error('Error synchronizing database:', error);

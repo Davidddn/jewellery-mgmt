@@ -11,6 +11,11 @@ module.exports = (sequelize) => {
         foreignKey: 'product_id',
         as: 'hallmarking'
       });
+        // Product belongs to Category
+        this.belongsTo(models.Category, {
+          foreignKey: 'category_id',
+          as: 'categoryObj',
+        });
     }
   }
 
@@ -27,9 +32,21 @@ module.exports = (sequelize) => {
     description: {
       type: DataTypes.TEXT,
     },
-    category: {
-      type: DataTypes.STRING(50),
-    },
+      category_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+          model: 'categories',
+          key: 'id',
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+      },
+      // Optionally keep the old string category for backward compatibility
+      category: {
+        type: DataTypes.STRING(50),
+        allowNull: true,
+      },
     subcategory: {
       type: DataTypes.STRING(50),
     },

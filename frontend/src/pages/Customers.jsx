@@ -1,27 +1,113 @@
 import React, { useState } from 'react';
 import {
-  Typography, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, CircularProgress, Alert, TextField, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle
+  Box,
+  Paper,
+  Typography,
+  Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton,
+  Avatar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  TextField,
+  Grid,
+  Card,
+  CardContent,
+  CardActions,
+  useTheme,
+  useMediaQuery,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
+  ListItemSecondaryAction,
+  Divider,
+  InputAdornment,
+  Alert,
+  Skeleton,
+  SpeedDial,
+  SpeedDialAction,
+  SpeedDialIcon,
+  Chip,
+  Badge,
+  SwipeableDrawer
 } from '@mui/material';
-import { useQuery, useQueryClient } from '@tanstack/react-query'; // Remove useMutation from here
+import {
+  Add,
+  Edit,
+  Delete,
+  Search,
+  Phone,
+  Email,
+  Person,
+  Close,
+  LocationOn,
+  FilterList
+} from '@mui/icons-material';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { customersAPI } from '../api/customers';
-import { Upload as UploadIcon } from '@mui/icons-material';
 
 const Customers = () => {
-  const [searchTerm, setSearchTerm] = useState('');
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const queryClient = useQueryClient();
-  const [errorAlert, setErrorAlert] = useState('');
+
+  // State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [openDialog, setOpenDialog] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [openDrawer, setOpenDrawer] = useState(false);
+  const [viewMode, setViewMode] = useState(isMobile ? 'card' : 'table');
+  const [speedDialOpen, setSpeedDialOpen] = useState(false);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['customers', { searchTerm }],
-    queryFn: () => customersAPI.getCustomers({ search: searchTerm }),
+  // Queries
+  const { data: customers, isLoading, error } = useQuery({
+    queryKey: ['customers'],
+    queryFn: customersAPI.getCustomers,
   });
 
-  const handleSearchChange = (event) => {
-    setSearchTerm(event.target.value);
+  // Mutations
+  const deleteCustomerMutation = useMutation({
+    mutationFn: customersAPI.deleteCustomer,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['customers']);
+    },
+  });
+
+  // Filtered customers
+  const filteredCustomers = customers?.customers?.filter(customer => {
+    const searchLower = searchTerm.toLowerCase();
+    return customer.name?.toLowerCase().includes(searchLower) ||
+           customer.email?.toLowerCase().includes(searchLower) ||
+           customer.phone?.includes(searchTerm);
+  }) || [];
+
+  const handleAddCustomer = () => {
+    setSelectedCustomer(null);
+    setOpenDialog(true);
+  };
+
+  const handleEditCustomer = (customer) => {
+    setSelectedCustomer(customer);
+    setOpenDialog(true);
+  };
+
+  const handleDeleteCustomer = async (customerId) => {
+    if (window.confirm('Are you sure you want to delete this customer?')) {
+      await deleteCustomerMutation.mutateAsync(customerId);
+    }
   };
 
   const handleFileChange = (event) => {
@@ -30,7 +116,7 @@ const Customers = () => {
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      setErrorAlert('Please select a file to upload.');
+      // Show toast or alert instead
       return;
     }
 
@@ -43,61 +129,451 @@ const Customers = () => {
       setUploadResult(result);
       queryClient.invalidateQueries(['customers']);
     } catch (error) {
-      setErrorAlert(error.response?.data?.message || 'Failed to upload CSV.');
+      console.error('Error uploading CSV:', error);
+      // Show error toast or alert instead
     } finally {
       setUploading(false);
       setUploadDialogOpen(false);
     }
   };
 
-  const customers = data?.customers || [];
+  const getInitials = (name) => {
+    return name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'C';
+  };
+
+  // Speed Dial Actions
+  const speedDialActions = [
+    { icon: <Add />, name: 'Add Customer', onClick: handleAddCustomer },
+    { icon: <FilterList />, name: 'Search', onClick: () => setOpenDrawer(true) },
+  ];
+
+  // Mobile Card View
+  const renderCardView = () => (
+    <Grid container spacing={2}>
+      {filteredCustomers.map((customer) => (
+        <Grid item xs={12} sm={6} md={4} lg={3} key={customer.id}>
+          <Card 
+            elevation={isMobile ? 1 : 2}
+            sx={{ 
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              transition: 'transform 0.2s',
+              '&:hover': {
+                transform: 'translateY(-2px)'
+              }
+            }}
+          >
+            <CardContent sx={{ flexGrow: 1, p: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Avatar
+                  sx={{ 
+                    bgcolor: 'primary.main',
+                    width: { xs: 40, sm: 48 },
+                    height: { xs: 40, sm: 48 },
+                    mr: 2
+                  }}
+                >
+                  {getInitials(customer.name)}
+                </Avatar>
+                <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                  <Typography 
+                    variant="h6" 
+                    component="h3" 
+                    noWrap 
+                    sx={{ fontSize: '1rem', fontWeight: 600 }}
+                  >
+                    {customer.name}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" noWrap>
+                    ID: {customer.id}
+                  </Typography>
+                </Box>
+              </Box>
+              
+              {customer.phone && (
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                  <Phone sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
+                  <Typography variant="body2" noWrap>
+                    {customer.phone}
+                  </Typography>
+                </Box>
+              )}
+              
+              {customer.email && (
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                  <Email sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
+                  <Typography variant="body2" noWrap>
+                    {customer.email}
+                  </Typography>
+                </Box>
+              )}
+              
+              {customer.address && (
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 2 }}>
+                  <LocationOn sx={{ fontSize: 16, mr: 1, color: 'text.secondary', mt: 0.5 }} />
+                  <Typography 
+                    variant="body2" 
+                    color="text.secondary"
+                    sx={{ 
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {customer.address}
+                  </Typography>
+                </Box>
+              )}
+
+              {customer.loyalty_points > 0 && (
+                <Chip
+                  label={`${customer.loyalty_points} points`}
+                  size="small"
+                  color="success"
+                  variant="outlined"
+                />
+              )}
+            </CardContent>
+            
+            <CardActions sx={{ p: 2, pt: 0 }}>
+              <Button
+                size="small"
+                startIcon={<Edit />}
+                onClick={() => handleEditCustomer(customer)}
+                sx={{ mr: 1 }}
+              >
+                Edit
+              </Button>
+              <IconButton
+                size="small"
+                color="error"
+                onClick={() => handleDeleteCustomer(customer.id)}
+              >
+                <Delete />
+              </IconButton>
+            </CardActions>
+          </Card>
+        </Grid>
+      ))}
+    </Grid>
+  );
+
+  // Desktop Table View
+  const renderTableView = () => (
+  <TableContainer component={Paper} elevation={1} sx={{ overflowX: 'auto' }}>
+      <Table stickyHeader>
+        <TableHead>
+          <TableRow>
+            <TableCell>Customer</TableCell>
+            <TableCell>Contact</TableCell>
+            <TableCell>Address</TableCell>
+            <TableCell>Loyalty Points</TableCell>
+            <TableCell>Actions</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {filteredCustomers.map((customer) => (
+            <TableRow key={customer.id} hover>
+              <TableCell>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
+                    {getInitials(customer.name)}
+                  </Avatar>
+                  <Box>
+                    <Typography variant="body2" fontWeight="500">
+                      {customer.name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      ID: {customer.id}
+                    </Typography>
+                  </Box>
+                </Box>
+              </TableCell>
+              <TableCell>
+                <Box>
+                  {customer.phone && (
+                    <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                      <Phone sx={{ fontSize: 16, mr: 1 }} />
+                      {customer.phone}
+                    </Typography>
+                  )}
+                  {customer.email && (
+                    <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Email sx={{ fontSize: 16, mr: 1 }} />
+                      {customer.email}
+                    </Typography>
+                  )}
+                </Box>
+              </TableCell>
+              <TableCell>
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    maxWidth: 200,
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden'
+                  }}
+                >
+                  {customer.address || 'N/A'}
+                </Typography>
+              </TableCell>
+              <TableCell>
+                {customer.loyalty_points > 0 ? (
+                  <Chip
+                    label={customer.loyalty_points}
+                    size="small"
+                    color="success"
+                  />
+                ) : (
+                  <Typography variant="body2" color="text.secondary">0</Typography>
+                )}
+              </TableCell>
+              <TableCell>
+                <IconButton
+                  onClick={() => handleEditCustomer(customer)}
+                  size="small"
+                  sx={{ mr: 1 }}
+                >
+                  <Edit />
+                </IconButton>
+                <IconButton
+                  onClick={() => handleDeleteCustomer(customer.id)}
+                  size="small"
+                  color="error"
+                >
+                  <Delete />
+                </IconButton>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
+
+  if (isLoading) {
+    return (
+      <Box sx={{ p: { xs: 2, md: 3 } }}>
+        <Typography variant="h4" sx={{ mb: 3 }}>Customers</Typography>
+        <Grid container spacing={2}>
+          {[...Array(6)].map((_, i) => (
+            <Grid item xs={12} sm={6} md={4} key={i}>
+              <Card>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <Skeleton variant="circular" width={48} height={48} sx={{ mr: 2 }} />
+                    <Box sx={{ flexGrow: 1 }}>
+                      <Skeleton variant="text" height={24} />
+                      <Skeleton variant="text" height={20} width="60%" />
+                    </Box>
+                  </Box>
+                  <Skeleton variant="text" height={20} />
+                  <Skeleton variant="text" height={20} width="80%" />
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: { xs: 2, md: 3 } }}>
+        <Alert severity="error">
+          Failed to load customers. Please try again.
+        </Alert>
+      </Box>
+    );
+  }
 
   return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h4" gutterBottom>Customers</Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-        <TextField
-          label="Search Customers"
-          variant="outlined"
-          size="small"
-          value={searchTerm}
-          onChange={handleSearchChange}
-        />
-        <Button variant="contained" startIcon={<UploadIcon />} onClick={() => setUploadDialogOpen(true)}>Upload CSV</Button>
-        </Box>
+    <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
+      {/* Header */}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: { xs: 'flex-start', sm: 'center' },
+        flexDirection: { xs: 'column', sm: 'row' },
+        mb: 3,
+        gap: { xs: 2, sm: 0 }
+      }}>
+        <Typography 
+          variant={isMobile ? "h5" : "h4"} 
+          fontWeight="bold"
+        >
+          Customers ({filteredCustomers.length})
+        </Typography>
+        
+        {!isMobile && (
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={handleAddCustomer}
+          >
+            Add Customer
+          </Button>
+        )}
       </Box>
 
-      {errorAlert && <Alert severity="error" onClose={() => setErrorAlert('')} sx={{ mb: 2 }}>{errorAlert}</Alert>}
-      {isLoading && <CircularProgress />}
-      {error && <Alert severity="error">Failed to fetch customers: {error.message}</Alert>}
-      {!isLoading && !error && (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Phone</TableCell>
-                <TableCell align="right">Total Spent (₹)</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {customers.map((customer) => (
-                <TableRow key={customer.id}>
-                  <TableCell>{customer.name}</TableCell>
-                  <TableCell>{customer.email || 'N/A'}</TableCell>
-                  <TableCell>{customer.phone || 'N/A'}</TableCell>
-                  <TableCell align="right">{parseFloat(customer.total_spent).toLocaleString('en-IN')}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+      {/* Search */}
+      {!isMobile && (
+        <Paper elevation={1} sx={{ p: 2, mb: 3 }}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} sm={6} md={4}>
+              <TextField
+                fullWidth
+                placeholder="Search customers..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  variant={viewMode === 'table' ? 'contained' : 'outlined'}
+                  onClick={() => setViewMode('table')}
+                  size="small"
+                >
+                  Table
+                </Button>
+                <Button
+                  variant={viewMode === 'card' ? 'contained' : 'outlined'}
+                  onClick={() => setViewMode('card')}
+                  size="small"
+                >
+                  Cards
+                </Button>
+              </Box>
+            </Grid>
+          </Grid>
+        </Paper>
       )}
 
+      {/* Content */}
+      {filteredCustomers.length === 0 ? (
+        <Paper elevation={1} sx={{ p: 4, textAlign: 'center' }}>
+          <Person sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+          <Typography variant="h6" color="text.secondary" gutterBottom>
+            No customers found
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            {searchTerm ? 'Try adjusting your search criteria' : 'Get started by adding your first customer'}
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={handleAddCustomer}
+          >
+            Add Customer
+          </Button>
+        </Paper>
+      ) : (
+        <>
+          {/* Desktop Table View */}
+          {!isMobile && viewMode === 'table' && renderTableView()}
+          
+          {/* Card View (Mobile and Desktop) */}
+          {(isMobile || viewMode === 'card') && renderCardView()}
+        </>
+      )}
+
+      {/* Mobile Speed Dial */}
+      {isMobile && (
+        <SpeedDial
+          ariaLabel="Customer actions"
+          sx={{ position: 'fixed', bottom: 16, right: 16 }}
+          icon={<SpeedDialIcon />}
+          open={speedDialOpen}
+          onClose={() => setSpeedDialOpen(false)}
+          onOpen={() => setSpeedDialOpen(true)}
+        >
+          {speedDialActions.map((action) => (
+            <SpeedDialAction
+              key={action.name}
+              icon={action.icon}
+              tooltipTitle={action.name}
+              onClick={() => {
+                action.onClick();
+                setSpeedDialOpen(false);
+              }}
+            />
+          ))}
+        </SpeedDial>
+      )}
+
+      {/* Mobile Search Drawer */}
+      <SwipeableDrawer
+        anchor="bottom"
+        open={openDrawer}
+        onClose={() => setOpenDrawer(false)}
+        onOpen={() => setOpenDrawer(true)}
+        disableSwipeToOpen
+        PaperProps={{
+          sx: { borderRadius: '16px 16px 0 0', maxHeight: '50vh' }
+        }}
+      >
+        <Box sx={{ p: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">Search Customers</Typography>
+            <IconButton onClick={() => setOpenDrawer(false)}>
+              <Close />
+            </IconButton>
+          </Box>
+          
+          <TextField
+            fullWidth
+            placeholder="Search by name, email, or phone..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ mb: 2 }}
+          />
+          
+          <Button
+            fullWidth
+            variant="outlined"
+            onClick={() => {
+              setSearchTerm('');
+              setOpenDrawer(false);
+            }}
+          >
+            Clear Search
+          </Button>
+        </Box>
+      </SwipeableDrawer>
+
+      {/* Customer Dialog */}
+      <CustomerDialog
+        open={openDialog}
+        onClose={() => setOpenDialog(false)}
+        customer={selectedCustomer}
+        onSuccess={() => {
+          setOpenDialog(false);
+          queryClient.invalidateQueries(['customers']);
+        }}
+      />
+
       {/* Upload CSV Dialog */}
-      <Dialog open={uploadDialogOpen} onClose={() => setUploadDialogOpen(false)}>
+  <Dialog open={uploadDialogOpen} onClose={() => setUploadDialogOpen(false)} fullScreen={isMobile}>
         <DialogTitle>Upload CSV</DialogTitle>
         <DialogContent>
           <DialogContentText>
@@ -118,7 +594,7 @@ const Customers = () => {
       </Dialog>
 
       {/* Upload Result Dialog */}
-      <Dialog open={!!uploadResult} onClose={() => setUploadResult(null)}>
+  <Dialog open={!!uploadResult} onClose={() => setUploadResult(null)} fullScreen={isMobile}>
         <DialogTitle>Upload Result</DialogTitle>
         <DialogContent>
           <DialogContentText>
@@ -132,6 +608,186 @@ const Customers = () => {
         </DialogActions>
       </Dialog>
     </Box>
+  );
+};
+
+// Customer Dialog Component
+const CustomerDialog = ({ open, onClose, customer, onSuccess }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    date_of_birth: '',
+    anniversary_date: ''
+  });
+
+  React.useEffect(() => {
+    if (customer) {
+      setFormData({
+        name: customer.name || '',
+        email: customer.email || '',
+        phone: customer.phone || '',
+        address: customer.address || '',
+        date_of_birth: customer.date_of_birth || '',
+        anniversary_date: customer.anniversary_date || ''
+      });
+    } else {
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        address: '',
+        date_of_birth: '',
+        anniversary_date: ''
+      });
+    }
+  }, [customer]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (customer) {
+        await customersAPI.updateCustomer(customer.id, formData);
+      } else {
+        await customersAPI.createCustomer(formData);
+      }
+      onSuccess();
+    } catch (error) {
+      console.error('Failed to save customer:', error);
+    }
+  };
+
+  const handleChange = (field) => (e) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: e.target.value
+    }));
+  };
+
+  return (
+    <Dialog
+      fullScreen={isMobile}
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      PaperProps={{
+        sx: isMobile ? {} : { borderRadius: 2 }
+      }}
+    >
+      <DialogTitle sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        pb: 1
+      }}>
+        <Typography variant="h6">
+          {customer ? 'Edit Customer' : 'Add New Customer'}
+        </Typography>
+        {isMobile && (
+          <IconButton onClick={onClose}>
+            <Close />
+          </IconButton>
+        )}
+      </DialogTitle>
+      
+      <form onSubmit={handleSubmit}>
+        <DialogContent dividers>
+          <Grid container spacing={3}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Full Name"
+                value={formData.name}
+                onChange={handleChange('name')}
+                required
+                size={isMobile ? "small" : "medium"}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Phone Number"
+                value={formData.phone}
+                onChange={handleChange('phone')}
+                size={isMobile ? "small" : "medium"}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Email Address"
+                type="email"
+                value={formData.email}
+                onChange={handleChange('email')}
+                size={isMobile ? "small" : "medium"}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Address"
+                multiline
+                rows={isMobile ? 3 : 4}
+                value={formData.address}
+                onChange={handleChange('address')}
+                size={isMobile ? "small" : "medium"}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Date of Birth"
+                type="date"
+                value={formData.date_of_birth}
+                onChange={handleChange('date_of_birth')}
+                InputLabelProps={{ shrink: true }}
+                size={isMobile ? "small" : "medium"}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Anniversary Date"
+                type="date"
+                value={formData.anniversary_date}
+                onChange={handleChange('anniversary_date')}
+                InputLabelProps={{ shrink: true }}
+                size={isMobile ? "small" : "medium"}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        
+        <DialogActions sx={{ p: 3, flexDirection: isMobile ? 'column' : 'row', gap: 1 }}>
+          {!isMobile && (
+            <Button onClick={onClose}>
+              Cancel
+            </Button>
+          )}
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth={isMobile}
+            size={isMobile ? "large" : "medium"}
+          >
+            {customer ? 'Update Customer' : 'Add Customer'}
+          </Button>
+          {isMobile && (
+            <Button 
+              onClick={onClose}
+              fullWidth
+              size="large"
+            >
+              Cancel
+            </Button>
+          )}
+        </DialogActions>
+      </form>
+    </Dialog>
   );
 };
 

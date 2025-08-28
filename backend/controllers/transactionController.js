@@ -1,5 +1,5 @@
 const { Transaction, Product, Customer, Loyalty, TransactionItem, sequelize } = require('../models');
-const { Op } = require('sequelize');
+const { Op, fn, col } = require('sequelize');
 const PDFDocument = require('pdfkit');
 const { Parser } = require('json2csv');
 const fs = require('fs');
@@ -8,7 +8,7 @@ const csv = require('csv-parser');
 // @desc    Create a new transaction
 // @route   POST /api/transactions
 // @access  Admin, Sales
-exports.createTransaction = async (req, res) => {
+const createTransaction = async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { customer_id, items, payment_mode } = req.body;
@@ -20,7 +20,7 @@ exports.createTransaction = async (req, res) => {
     }
 
     let total_amount = 0;
-    let total_gst = 0;
+    let total_tax = 0;
     const transactionItems = [];
 
     for (const item of items) {
@@ -29,9 +29,9 @@ exports.createTransaction = async (req, res) => {
       if (product.stock_quantity < item.quantity) throw new Error(`Insufficient stock for ${product.name}.`);
 
       const item_base_price = product.selling_price * item.quantity;
-      const item_gst = item_base_price * 0.03; // Example GST
-      total_amount += item_base_price + item_gst;
-      total_gst += item_gst;
+      const item_tax = item_base_price * 0.03; // Example GST
+      total_amount += item_base_price + item_tax;
+      total_tax += item_tax;
 
       product.stock_quantity -= item.quantity;
       await product.save({ transaction: t });
@@ -48,7 +48,7 @@ exports.createTransaction = async (req, res) => {
       customer_id,
       user_id: req.user.id,
       total_amount,
-      gst_amount: total_gst,
+      tax_amount: total_tax,
       final_amount: total_amount,
       payment_method: payment_mode,
       transaction_status: 'completed',
@@ -85,10 +85,10 @@ exports.createTransaction = async (req, res) => {
 // @desc    Get all transactions
 // @route   GET /api/transactions
 // @access  Admin, Manager, Sales
-exports.getTransactions = async (req, res) => {
+const getTransactions = async (req, res) => {
   try {
     const transactions = await Transaction.findAll({
-      order: [['createdAt', 'DESC']],
+      order: [['created_at', 'DESC']],
       include: [{ model: Customer, as: 'customer', attributes: ['name', 'phone'] }],
     });
     res.json({ success: true, transactions });
@@ -97,10 +97,105 @@ exports.getTransactions = async (req, res) => {
   }
 };
 
+// @desc    Get recent transactions
+// @route   GET /api/transactions/recent
+// @access  Admin, Manager, Sales
+const getRecentTransactions = async (req, res) => {
+  try {
+    const { limit = 5 } = req.query;
+    const transactions = await Transaction.findAll({
+      order: [['created_at', 'DESC']],
+      limit: parseInt(limit),
+      include: [{ model: Customer, as: 'customer', attributes: ['name'] }],
+    });
+    res.json({ success: true, transactions });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// @desc    Get real-time stats
+// @route   GET /api/transactions/realtime-stats
+// @access  Admin, Manager, Sales
+const getRealtimeStats = async (req, res) => {
+  try {
+    // Get current date in UTC
+    const now = new Date();
+    const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+    const endOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+
+    const todaysTransactions = await Transaction.findAll({
+      where: {
+        created_at: {
+          [Op.gte]: startOfDay,
+          [Op.lte]: endOfDay
+        },
+        transaction_type: 'sale',
+        transaction_status: 'completed'
+      }
+    });
+
+    const todaysSales = todaysTransactions.reduce((sum, t) => sum + Number(t.final_amount), 0);
+
+    const recentTransactionsRaw = await Transaction.findAll({
+      order: [['created_at', 'DESC']],
+      limit: 5,
+      include: [{ model: Customer, as: 'customer', attributes: ['name'] }],
+    });
+
+    // Format for frontend: id, final_amount, created_at, customer: { name }
+    const recentTransactions = recentTransactionsRaw.map(t => ({
+      id: t.id,
+      final_amount: t.final_amount,
+      created_at: t.created_at,
+      customer: t.customer ? { name: t.customer.name } : null
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        todaysSales,
+        todaysTransactions: todaysTransactions.length,
+        recentTransactions
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// @desc    Get sales timeline
+// @route   GET /api/transactions/sales-timeline
+// @access  Admin, Manager, Sales
+const getSalesTimeline = async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const sales = await Transaction.findAll({
+      where: {
+        created_at: { [Op.gte]: today },
+        transaction_type: 'sale',
+        transaction_status: 'completed'
+      },
+      attributes: [
+        [fn('strftime', '%Y-%m-%d %H:00:00', col('created_at')), 'hour'],
+        [fn('sum', col('final_amount')), 'sales']
+      ],
+      group: ['hour'],
+      order: [['hour', 'ASC']]
+    });
+
+    res.json({ success: true, data: sales });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // @desc    Get a single transaction by ID
 // @route   GET /api/transactions/:id
 // @access  Admin, Manager, Sales
-exports.getTransactionById = async (req, res) => {
+const getTransactionById = async (req, res) => {
   try {
     const { id } = req.params;
     const transaction = await Transaction.findByPk(id, {
@@ -126,7 +221,7 @@ exports.getTransactionById = async (req, res) => {
 // @desc    Update a transaction
 // @route   PUT /api/transactions/:id
 // @access  Admin
-exports.updateTransaction = async (req, res) => {
+const updateTransaction = async (req, res) => {
   try {
     const { id } = req.params;
     const [updated] = await Transaction.update(req.body, { where: { id } });
@@ -149,7 +244,7 @@ exports.updateTransaction = async (req, res) => {
 // @desc    Delete a transaction
 // @route   DELETE /api/transactions/:id
 // @access  Admin
-exports.deleteTransaction = async (req, res) => {
+const deleteTransaction = async (req, res) => {
   try {
     const { id } = req.params;
     const deleted = await Transaction.destroy({ where: { id } });
@@ -166,7 +261,7 @@ exports.deleteTransaction = async (req, res) => {
 // @desc    Generate PDF/CSV Invoice for a transaction
 // @route   GET /api/transactions/:id/invoice?format=csv
 // @access  Admin, Manager, Sales
-exports.getInvoice = async (req, res) => {
+const getInvoice = async (req, res) => {
     try {
         const { id } = req.params;
         const { format } = req.query; // Get format from query parameter
@@ -198,7 +293,7 @@ exports.getInvoice = async (req, res) => {
                 { label: 'Unit Price', value: 'items.unit_price' },
                 { label: 'Total Price', value: 'items.total_price' },
                 { label: 'Subtotal', value: 'subtotal' },
-                { label: 'GST Amount', value: 'gst_amount' },
+                { label: 'GST Amount', value: 'tax_amount' },
                 { label: 'Final Amount', value: 'final_amount' },
             ];
 
@@ -209,9 +304,9 @@ exports.getInvoice = async (req, res) => {
                     name: transaction.customer ? transaction.customer.name : '',
                     phone: transaction.customer ? transaction.customer.phone : '',
                 },
-                gst_amount: parseFloat(transaction.gst_amount).toFixed(2),
+                tax_amount: parseFloat(transaction.tax_amount).toFixed(2),
                 final_amount: parseFloat(transaction.final_amount).toFixed(2),
-                subtotal: (parseFloat(transaction.final_amount) - parseFloat(transaction.gst_amount || 0)).toFixed(2),
+                subtotal: (parseFloat(transaction.final_amount) - parseFloat(transaction.tax_amount || 0)).toFixed(2),
             };
 
             const itemsData = transaction.items.map(item => ({
@@ -282,13 +377,13 @@ exports.getInvoice = async (req, res) => {
 
             // Totals
             const totalsY = doc.y;
-            const subtotal = parseFloat(transaction.final_amount) - parseFloat(transaction.gst_amount || 0);
+            const subtotal = parseFloat(transaction.final_amount) - parseFloat(transaction.tax_amount || 0);
             doc.font('Helvetica-Bold');
             doc.text('Subtotal:', 350, totalsY, { width: 100, align: 'right' });
             doc.text(`₹${subtotal.toFixed(2)}`, 450, totalsY, { width: 100, align: 'right' });
             
             doc.text('GST:', 350, totalsY + 20, { width: 100, align: 'right' });
-            doc.text(`₹${parseFloat(transaction.gst_amount).toFixed(2)}`, 450, totalsY + 20, { width: 100, align: 'right' });
+            doc.text(`₹${parseFloat(transaction.tax_amount).toFixed(2)}`, 450, totalsY + 20, { width: 100, align: 'right' });
             
             doc.text('Total:', 350, totalsY + 40, { width: 100, align: 'right' });
             doc.text(`₹${parseFloat(transaction.final_amount).toFixed(2)}`, 450, totalsY + 40, { width: 100, align: 'right' });
@@ -303,7 +398,7 @@ exports.getInvoice = async (req, res) => {
     }
 };
 
-exports.uploadCSV = async (req, res) => {
+const uploadCSV = async (req, res) => {
   if (!req.file) {
     return res.status(400).send('No file uploaded.');
   }
@@ -348,8 +443,8 @@ exports.uploadCSV = async (req, res) => {
           }
 
           const item_base_price = product.selling_price * quantity;
-          const item_gst = item_base_price * 0.03; // Example GST
-          const total_amount = item_base_price + item_gst;
+          const item_tax = item_base_price * 0.03; // Example GST
+          const total_amount = item_base_price + item_tax;
 
           product.stock_quantity -= quantity;
           await product.save({ transaction: t });
@@ -358,7 +453,7 @@ exports.uploadCSV = async (req, res) => {
             customer_id: customer.id,
             user_id: req.user.id,
             total_amount: total_amount,
-            gst_amount: item_gst,
+            tax_amount: item_tax,
             final_amount: total_amount,
             payment_method: payment_mode,
             transaction_status: 'completed',
@@ -405,7 +500,7 @@ exports.uploadCSV = async (req, res) => {
     });
 };
 
-exports.exportCSV = async (req, res) => {
+const exportCSV = async (req, res) => {
   try {
     const transactions = await Transaction.findAll({
       include: [{ model: Customer, as: 'customer', attributes: ['name', 'phone'] }],
@@ -420,4 +515,18 @@ exports.exportCSV = async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
+};
+
+module.exports = {
+  createTransaction,
+  getTransactions,
+  getRecentTransactions,
+  getRealtimeStats,
+  getTransactionById,
+  updateTransaction,
+  deleteTransaction,
+  getInvoice,
+  uploadCSV,
+  exportCSV,
+  getSalesTimeline,
 };

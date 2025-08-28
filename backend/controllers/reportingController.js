@@ -108,7 +108,16 @@ exports.dailySalesDashboard = async (req, res) => {
 
     res.json({
       success: true,
-      dashboard: { revenue, transactionCount, topSelling, lowStockProducts, totalCustomers },
+      data: {
+        todaySales: revenue,
+        todayTransactions: transactionCount,
+        totalCustomers,
+        // Add these if you want them to show up:
+        totalProducts: await Product.count(),
+        totalRevenue: revenue, // or your logic for total revenue
+        monthlyGrowth: 0, // or your logic for growth
+        // ...other fields as needed
+      }
     });
   } catch (err) {
     console.error('Error in dailySalesDashboard:', err);
@@ -128,10 +137,12 @@ exports.getGoldRate = async (req, res) => {
 
     res.json({
       success: true,
-      rates: {
-        '24K': rate24k,
-        '22K': rate22k,
-        '18K': rate18k,
+      data: {
+        rates: {
+          '24K': rate24k,
+          '22K': rate22k,
+          '18K': rate18k,
+        }
       },
     });
   } catch (err) {
@@ -142,45 +153,15 @@ exports.getGoldRate = async (req, res) => {
 exports.getSalesAnalytics = async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
-    let whereClause = {};
     let transactionWhereClause = { transaction_type: 'sale', transaction_status: 'completed' };
 
     if (start_date && end_date) {
       const startDate = new Date(start_date);
       const endDate = new Date(end_date);
-      whereClause['$transaction.created_at$'] = {
-        [Op.between]: [startDate, endDate],
-      };
       transactionWhereClause.created_at = {
         [Op.between]: [startDate, endDate],
       };
     }
-
-    const salesReport = await TransactionItem.findAll({
-      attributes: [
-        [col('transaction.created_at'), 'date'],
-        [col('product.name'), 'productName'],
-        ['quantity', 'totalQuantity'],
-        ['total_price', 'totalAmount'],
-      ],
-      include: [
-        {
-          model: Transaction,
-          as: 'transaction',
-          attributes: [],
-          required: true
-        },
-        {
-          model: Product,
-          as: 'product',
-          attributes: [],
-          required: true
-        },
-      ],
-      where: whereClause,
-      order: [[col('transaction.created_at'), 'DESC']],
-      raw: true,
-    });
 
     const dailySales = await Transaction.findAll({
       attributes: [
@@ -193,14 +174,97 @@ exports.getSalesAnalytics = async (req, res) => {
       raw: true,
     });
 
+    // Return as array of {date, total_sales} objects for Recharts
+    const dailySalesArray = dailySales.map(d => ({
+      date: d.date,
+      total_sales: Number(d.total_sales)
+    }));
+
+    // Aggregate sales details for the table (date, productName, totalQuantity, totalAmount)
+    const { sequelize } = require('../models');
+    const salesDetails = await TransactionItem.findAll({
+      attributes: [
+        [sequelize.literal("date(TransactionItem.created_at)"), 'date'],
+        [sequelize.col('product.id'), 'productId'],
+        [sequelize.col('product.name'), 'productName'],
+        [fn('SUM', col('quantity')), 'totalQuantity'],
+        [fn('SUM', col('total_price')), 'totalAmount']
+      ],
+      include: [
+        {
+          model: Transaction,
+          as: 'transaction',
+          attributes: [],
+          where: transactionWhereClause,
+        },
+        {
+          model: Product,
+          as: 'product',
+          attributes: [],
+        }
+      ],
+      group: [sequelize.literal('date(TransactionItem.created_at)'), sequelize.col('product.id'), sequelize.col('product.name')],
+      order: [[sequelize.literal('date(TransactionItem.created_at)'), 'DESC']],
+      raw: true,
+    });
+
     res.json({
       success: true,
-      report: { sales: salesReport, dailySales: dailySales },
+      report: {
+        dailySales: dailySalesArray,
+        sales: salesDetails
+      }
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+exports.getInventoryAnalytics = async (req, res) => {
+  try {
+    const categoryBreakdown = await Product.findAll({
+      attributes: ['category', [fn('SUM', col('stock_quantity')), 'totalStock']],
+      group: ['category'],
+      raw: true,
+    });
+
+    const labels = categoryBreakdown.map(c => c.category);
+    const data = categoryBreakdown.map(c => c.totalStock);
+
+    res.json({
+      success: true,
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Inventory by Category',
+            data,
+            backgroundColor: [
+              'rgba(255, 99, 132, 0.2)',
+              'rgba(54, 162, 235, 0.2)',
+              'rgba(255, 206, 86, 0.2)',
+              'rgba(75, 192, 192, 0.2)',
+              'rgba(153, 102, 255, 0.2)',
+              'rgba(255, 159, 64, 0.2)',
+            ],
+            borderColor: [
+              'rgba(255, 99, 132, 1)',
+              'rgba(54, 162, 235, 1)',
+              'rgba(255, 206, 86, 1)',
+              'rgba(75, 192, 192, 1)',
+              'rgba(153, 102, 255, 1)',
+              'rgba(255, 159, 64, 1)',
+            ],
+            borderWidth: 1,
+          },
+        ],
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 
 exports.getInventoryReports = async (req, res) => {
   try {

@@ -17,9 +17,7 @@ const logoStorage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     // Keep timestamp to track upload history and avoid conflicts
-    const timestamp = Date.now();
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `logo-${timestamp}${ext}`);
+    cb(null, `logo.jpg`);
   },
 });
 
@@ -44,8 +42,11 @@ router.get('/', auth, settingsController.getSettings);
 router.put('/', auth, checkRole(['admin']), settingsController.updateSettings);
 
 // Logo routes - GET doesn't need auth for display, POST needs auth for upload
-router.get('/logo', settingsController.getLogo); // ← Remove auth here for public access
+router.get('/logo', settingsController.getLogo); // Current active logo
+router.get('/logos', settingsController.getAllLogos); // List all logos
+router.get('/logo/:filename', settingsController.getLogoByFilename); // Specific logo by filename
 router.post('/logo', auth, checkRole(['admin']), uploadLogo.single('logo'), settingsController.uploadLogo);
+router.put('/logo/active', auth, checkRole(['admin']), settingsController.setActiveLogo); // Set active logo
 
 // Individual setting routes
 router.get('/:key', auth, settingsController.getSetting);

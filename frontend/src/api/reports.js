@@ -45,6 +45,15 @@ export const reportsAPI = {
   },
 
   /**
+   * Fetches inventory analytics data.
+   * @returns {Promise<object>} The inventory analytics data.
+   */
+  getInventoryAnalytics: async () => {
+    const response = await api.get('/reports/inventory-analytics');
+    return response.data;
+  },
+
+  /**
    * Fetches inventory report data.
    * @returns {Promise<object>} The inventory report data.
    */
