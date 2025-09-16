@@ -6,9 +6,13 @@
     "backend",
     "frontend"
   ],
+  "scripts": {
+    "build": "npm run build --workspace=frontend",
+    "start": "npm run start --workspace=backend"
+  },
   "dependencies": {
     "@emotion/react": "^11.14.0",
-    "@emotion/styled": "^11.14.1",
+    "@emotion/styled": "^11.14.1", 
     "@mui/material": "^7.3.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
