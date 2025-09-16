@@ -1,0 +1,5 @@
+Name,SKU,Barcode,Category,Subcategory,Metal Type,Purity,Weight (g),Stone Type,Stone Weight (ct),Cost Price (₹),Selling Price (₹),Discount %,Stock Quantity,Reorder Level,Supplier,Tags,Status,Description
+Gold Ring 22K,GR001,1234567890123,Rings,Wedding Rings,Gold,22K,5.5,Diamond,0.5,25000,35000,10,50,10,ABC Jewellers,"wedding,gold,diamond",Active,Beautiful 22K gold ring with diamond
+Silver Necklace,SN002,1234567890124,Necklaces,Silver Chains,Silver,925,15.2,,0,8000,12000,5,30,5,XYZ Silver,"silver,chain,necklace",Active,Elegant silver necklace
+Pearl Earrings,PE003,1234567890125,Earrings,Pearl Earrings,Gold,18K,3.2,Pearl,0,15000,22000,0,25,5,Pearl Paradise,"pearl,earrings,gold",Active,Stunning pearl earrings in 18K gold
+Diamond Bracelet,DB004,1234567890126,Bracelets,Diamond Bracelets,Platinum,950,12.8,Diamond,1.2,75000,95000,15,10,2,Diamond World,"diamond,bracelet,platinum",Active,Luxurious platinum diamond bracelet

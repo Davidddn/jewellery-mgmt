@@ -2,9 +2,11 @@ import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthProvider';
 import { CustomThemeProvider } from './contexts/CustomThemeContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { OfflineSyncProvider } from './contexts/OfflineSyncContext';
 import AppRoutes from './routes';
 import { useEffect } from 'react';
 import { subscribeUserToPush } from './pushNotifications';
+import PWAInstallPrompt from './components/PWAInstallPrompt';
 
 
 function App() {
@@ -26,7 +28,10 @@ function App() {
       <CustomThemeProvider>
         <AuthProvider>
           <NotificationProvider>
-            <AppRoutes />
+            <OfflineSyncProvider>
+              <AppRoutes />
+              <PWAInstallPrompt />
+            </OfflineSyncProvider>
           </NotificationProvider>
         </AuthProvider>
       </CustomThemeProvider>

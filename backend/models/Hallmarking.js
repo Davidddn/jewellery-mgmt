@@ -51,7 +51,7 @@ module.exports = (sequelize, DataTypes) => {
 
   // Define associations
   Hallmarking.associate = (models) => {
-    Hallmarking.belongsTo(models.Product, { foreignKey: 'product_id', as: 'product' });
+    Hallmarking.belongsTo(models.Product, { foreignKey: 'product_id', as: 'Product' });
   };
 
   return Hallmarking;

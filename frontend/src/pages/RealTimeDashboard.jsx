@@ -1,4 +1,4 @@
-import React, { useState, useEffect} from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
   Box,
   Paper,
@@ -43,7 +43,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { transactionsAPI } from '../api/transactions';
 import { productsAPI } from '../api/products';
 import { usersAPI } from '../api/users';
-import { useNotifications } from '../hooks/useNotifications';
+import { NotificationContext } from '../contexts/NotificationContext';
 
 // Simulated WebSocket hook (replace with actual WebSocket implementation)
 const useRealTimeData = (endpoint, refetchInterval = 5000) => {
@@ -70,7 +70,7 @@ const RealTimeDashboard = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const queryClient = useQueryClient();
-  const { showSnackbar } = useNotifications();
+  const { showSnackbar } = useContext(NotificationContext);
   
   const [realtimeStats, setRealtimeStats] = useState({
     todaysSales: 0,
@@ -84,82 +84,97 @@ const RealTimeDashboard = () => {
   // Real-time connection status
   const { isConnected, lastUpdate } = useRealTimeData('/api/realtime', 10000);
 
-  // Data queries with short refetch intervals for near real-time updates
-  const { isLoading: transactionsLoading } = useQuery({
+  // Data queries with reasonable caching and refetch intervals
+  const { data: transactionData, isLoading: transactionsLoading, error: transactionError } = useQuery({
     queryKey: ['realtime-transaction-stats'],
     queryFn: transactionsAPI.getRealtimeStats,
-    refetchInterval: 10000, // Refetch every 10 seconds
-    onSuccess: (data) => {
-      console.log('Realtime Transactions API Response:', data);
-      if (data?.data) {
-        setRealtimeStats(prev => ({
-          ...prev,
-          todaysSales: data.data.todaysSales,
-          todaysTransactions: data.data.todaysTransactions,
-          recentTransactions: data.data.recentTransactions
-        }));
-      }
-    }
+    refetchInterval: 30000, // Refetch every 30 seconds (not 10 seconds)
+    staleTime: 25000, // Consider data stale after 25 seconds
+    cacheTime: 300000, // Keep in cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    retry: 2, // Reduce retry attempts
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000)
   });
 
-  const { isLoading: productsLoading } = useQuery({
+  // Update state when transaction data changes
+  useEffect(() => {
+    console.log('Realtime Transactions API Response:', transactionData);
+    if (transactionData?.data) {
+      setRealtimeStats(prev => ({
+        ...prev,
+        todaysSales: transactionData.data.todaysSales || 0,
+        todaysTransactions: transactionData.data.todaysTransactions || 0,
+        recentTransactions: transactionData.data.recentTransactions || []
+      }));
+    }
+  }, [transactionData]);
+
+  const { data: productData } = useQuery({
     queryKey: ['realtime-product-stats'],
     queryFn: productsAPI.getRealtimeStats,
-    refetchInterval: 30000, // Refetch every 30 seconds
-    onSuccess: (data) => {
-      console.log('Realtime Products API Response:', data);
-      if (data?.data) {
-        setRealtimeStats(prev => {
-          const newStats = {
-            ...prev,
-            lowStockAlerts: data.data.lowStockAlerts
-          };
-          // Show notification for new low stock items
-          if (data.data.lowStockAlerts > prev.lowStockAlerts && prev.lowStockAlerts > 0) {
-            showSnackbar(`${data.data.lowStockAlerts - prev.lowStockAlerts} new low stock alerts!`, 'warning');
-          }
-          return newStats;
-        });
-      }
-    }
+    refetchInterval: 60000, // Refetch every 60 seconds
+    staleTime: 55000, // Consider data stale after 55 seconds  
+    cacheTime: 300000, // Keep in cache for 5 minutes
+    refetchOnWindowFocus: false
   });
 
-  const { isLoading: usersLoading } = useQuery({
+  // Update state when product data changes
+  useEffect(() => {
+    console.log('Realtime Products API Response:', productData);
+    if (productData?.data) {
+      setRealtimeStats(prev => ({
+        ...prev,
+        lowStockAlerts: productData.data.lowStockAlerts || 0
+      }));
+    }
+  }, [productData]);
+
+  const { data: userData } = useQuery({
     queryKey: ['realtime-user-stats'],
     queryFn: usersAPI.getActiveUserCount,
-    refetchInterval: 60000, // Refetch every 60 seconds
-    onSuccess: (data) => {
-      console.log('Realtime Users API Response:', data);
-      if (data?.data) {
-        setRealtimeStats(prev => ({
-          ...prev,
-          activeUsers: data.data.activeUsers
-        }));
-      }
-    }
+    refetchInterval: 120000, // Refetch every 2 minutes
+    staleTime: 110000, // Consider data stale after 110 seconds
+    cacheTime: 300000, // Keep in cache for 5 minutes
+    refetchOnWindowFocus: false
   });
 
-  const { isLoading: salesTimelineLoading } = useQuery({
+  // Update state when user data changes
+  useEffect(() => {
+    console.log('Realtime Users API Response:', userData);
+    if (userData?.data) {
+      setRealtimeStats(prev => ({
+        ...prev,
+        activeUsers: userData.data.activeUsers || 0
+      }));
+    }
+  }, [userData]);
+
+  const { data: salesTimelineApiData } = useQuery({
     queryKey: ['sales-timeline'],
     queryFn: transactionsAPI.getSalesTimeline,
-    refetchInterval: 60000, // Refetch every 60 seconds
-    onSuccess: (data) => {
-      console.log('Sales Timeline API Response:', data);
-      if (data?.data) {
-        const formattedData = data.data.map(item => ({
-          hour: new Date(item.hour).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          sales: parseFloat(item.sales)
-        }));
-        setSalesTimelineData(formattedData);
-      }
-    }
+    refetchInterval: 120000, // Refetch every 2 minutes
+    staleTime: 110000, // Consider data stale after 110 seconds
+    cacheTime: 300000, // Keep in cache for 5 minutes
+    refetchOnWindowFocus: false
   });
 
+  // Update state when sales timeline data changes
+  useEffect(() => {
+    console.log('Sales Timeline API Response:', salesTimelineApiData);
+    if (salesTimelineApiData?.data) {
+      const formattedData = salesTimelineApiData.data.map(item => ({
+        hour: item.hour,
+        sales: parseFloat(item.sales) || 0
+      }));
+      setSalesTimelineData(formattedData);
+    }
+  }, [salesTimelineApiData]);
+
   const handleManualRefresh = () => {
-    queryClient.invalidateQueries(['realtime-transaction-stats']);
-    queryClient.invalidateQueries(['realtime-product-stats']);
-    queryClient.invalidateQueries(['realtime-user-stats']);
-    queryClient.invalidateQueries(['sales-timeline']);
+    queryClient.invalidateQueries({ queryKey: ['realtime-transaction-stats'] });
+    queryClient.invalidateQueries({ queryKey: ['realtime-product-stats'] });
+    queryClient.invalidateQueries({ queryKey: ['realtime-user-stats'] });
+    queryClient.invalidateQueries({ queryKey: ['sales-timeline'] });
     showSnackbar('Data refreshed successfully!', 'success');
   };
 
@@ -180,16 +195,52 @@ const RealTimeDashboard = () => {
 
   const connectionStatus = getConnectionStatus();
 
-  if (transactionsLoading || productsLoading || usersLoading || salesTimelineLoading) {
+  // Show loading only for initial load, but be more permissive
+  const isInitialLoading = transactionsLoading && !transactionData && !transactionError;
+  
+  // Add debugging
+  console.log('Debug - Loading states:', {
+    transactionsLoading,
+    hasTransactionData: !!transactionData,
+    hasTransactionError: !!transactionError,
+    transactionErrorMessage: transactionError?.message,
+    isInitialLoading,
+    realtimeStats
+  });
+
+  if (isInitialLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: 400, gap: 2 }}>
         <CircularProgress />
+        <Typography variant="body2" color="text.secondary">
+          Loading real-time dashboard...
+        </Typography>
+      </Box>
+    );
+  }
+  
+  // Show error state if all queries failed
+  if (transactionError && !transactionData) {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: 400, gap: 2 }}>
+        <Typography variant="h6" color="error">
+          Failed to load dashboard data
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {transactionError?.message || 'Unknown error occurred'}
+        </Typography>
+        <button onClick={handleManualRefresh}>Retry</button>
       </Box>
     );
   }
 
   return (
-    <Box sx={{ p: { xs: 1, md: 3 } }}>
+    <Box sx={{ 
+      width: '100%',
+      maxWidth: '100%',
+      overflow: 'hidden',
+      p: 0
+    }}>
       {/* Header with real-time status */}
       <Box sx={{ 
         display: 'flex', 
@@ -197,6 +248,8 @@ const RealTimeDashboard = () => {
         alignItems: { xs: 'flex-start', md: 'center' },
         flexDirection: { xs: 'column', md: 'row' },
         mb: 3,
+        px: 0.5,
+        py: 1,
         gap: { xs: 2, md: 0 }
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -373,7 +426,19 @@ const RealTimeDashboard = () => {
               <Typography variant="h6" sx={{ mb: 2 }}>
                 Recent Transactions
               </Typography>
-              <Box sx={{ height: 300, overflow: 'auto' }}>
+              <Box sx={{ 
+                height: 300, 
+                overflow: 'hidden', // Hide scrollbar
+                '&:hover': {
+                  overflow: 'auto' // Show scrollbar only on hover
+                },
+                // Hide scrollbar for webkit browsers
+                '&::-webkit-scrollbar': {
+                  display: 'none'
+                },
+                // Hide scrollbar for Firefox
+                scrollbarWidth: 'none'
+              }}>
                 {realtimeStats.recentTransactions.length === 0 ? (
                   <Alert severity="info">No recent transactions</Alert>
                 ) : (

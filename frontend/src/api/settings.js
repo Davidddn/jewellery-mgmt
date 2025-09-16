@@ -73,6 +73,132 @@ export const settingsAPI = {
   updateSettings: async (settings) => {
     const response = await api.put('/settings', settings);
     return response.data;
+  },
+
+  resetSettings: async () => {
+    const response = await api.post('/settings/reset');
+    return response.data;
+  },
+
+  // Data Management Operations
+  clearAllData: async () => {
+    const response = await api.delete('/settings/clear-all-data');
+    return response.data;
+  },
+
+  factoryReset: async () => {
+    const response = await api.post('/settings/factory-reset');
+    return response.data;
+  },
+
+  // Data Export Operations
+  exportAllData: async () => {
+    const response = await api.get('/settings/export/all', { responseType: 'blob' });
+    return response.data;
+  },
+
+  exportProducts: async () => {
+    const response = await api.get('/settings/export/products', { responseType: 'blob' });
+    return response.data;
+  },
+
+  exportCustomers: async () => {
+    const response = await api.get('/settings/export/customers', { responseType: 'blob' });
+    return response.data;
+  },
+
+  exportTransactions: async () => {
+    const response = await api.get('/settings/export/transactions', { responseType: 'blob' });
+    return response.data;
+  },
+
+  // Database Operations
+  backupDatabase: async () => {
+    const response = await api.post('/settings/backup', { responseType: 'blob' });
+    return response.data;
+  },
+
+  restoreDatabase: async (file) => {
+    const formData = new FormData();
+    formData.append('backup', file);
+    const response = await api.post('/settings/restore', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  },
+
+  // Data Cleanup Operations
+  cleanDuplicates: async () => {
+    const response = await api.post('/settings/cleanup/duplicates');
+    return response.data;
+  },
+
+  archiveOldData: async () => {
+    const response = await api.post('/settings/cleanup/archive');
+    return response.data;
+  },
+
+  rebuildIndexes: async () => {
+    const response = await api.post('/settings/maintenance/rebuild-indexes');
+    return response.data;
+  },
+
+  validateData: async () => {
+    const response = await api.post('/settings/maintenance/validate-data');
+    return response.data;
+  },
+
+  updateStatistics: async () => {
+    const response = await api.post('/settings/maintenance/update-stats');
+    return response.data;
+  },
+
+  syncInventory: async () => {
+    const response = await api.post('/settings/maintenance/sync-inventory');
+    return response.data;
+  },
+
+  // Data Import Operations
+  importProducts: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await api.post('/settings/import/products', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  importCustomers: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await api.post('/settings/import/customers', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  importTransactions: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await api.post('/settings/import/transactions', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  // System Information
+  getSystemInfo: async () => {
+    const response = await api.get('/settings/system-info');
+    return response.data;
   }
 };
 

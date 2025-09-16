@@ -9,7 +9,7 @@ export const authAPI = {
    * @returns {Promise<object>} The response data, including user and token.
    */
   login: async (credentials) => {
-  const response = await api.post('/api/auth/login', credentials);
+  const response = await api.post('/auth/login', credentials);
     return response.data;
   },
 
@@ -58,6 +58,18 @@ export const authAPI = {
    */
   logout: async () => {
     const response = await api.post('/auth/logout');
+    return response.data;
+  },
+
+  /**
+   * Changes the password for the currently authenticated user.
+   * @param {object} passwordData - The password change data.
+   * @param {string} passwordData.currentPassword - The current password.
+   * @param {string} passwordData.newPassword - The new password.
+   * @returns {Promise<object>} The response data from the server.
+   */
+  changePassword: async (passwordData) => {
+    const response = await api.put('/auth/change-password', passwordData);
     return response.data;
   }
 };

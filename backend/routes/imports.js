@@ -17,4 +17,7 @@ router.post('/customers', authorize(['admin', 'manager']), upload.single('file')
 // Import Transactions from CSV
 router.post('/transactions', authorize(['admin', 'manager']), upload.single('file'), importController.importTransactions);
 
+// Import Inventory Updates from CSV
+router.post('/inventory', authorize(['admin', 'manager']), upload.single('file'), importController.importInventoryUpdates);
+
 module.exports = router;

@@ -1,0 +1,6 @@
+Customer ID,User ID,Transaction Type,Total Amount,Discount Amount,Tax Amount,Final Amount,Payment Method,Payment Status,Transaction Status,Notes,Created At,Updated At
+1,1,sale,35000,3500,3150,34650,Credit Card,completed,completed,Gold ring purchase,2024-01-15 10:30:00,2024-01-15 10:30:00
+2,1,sale,22000,0,1980,23980,Cash,completed,completed,Silver necklace purchase,2024-01-16 14:20:00,2024-01-16 14:20:00
+3,2,sale,95000,14250,7087.5,87837.5,UPI,completed,completed,Diamond bracelet purchase,2024-01-17 11:45:00,2024-01-17 11:45:00
+1,1,exchange,18000,0,1620,19620,Cash,completed,completed,Pearl earrings exchange,2024-01-18 16:15:00,2024-01-18 16:15:00
+4,2,sale,12000,600,1026,12426,Debit Card,completed,completed,Gold chain purchase,2024-01-19 09:30:00,2024-01-19 09:30:00

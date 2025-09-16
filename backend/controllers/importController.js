@@ -12,20 +12,32 @@ exports.importCustomers = async (req, res) => {
     fs.createReadStream(req.file.path)
         .pipe(csv())
         .on('data', (row) => {
-            customersToImport.push({
-                name: row.Name,
-                email: row.Email,
-                phone: row.Phone,
-                address: row.Address,
-                date_of_birth: row['Date of Birth'],
-                gender: row.Gender,
-                loyalty_points: parseInt(row['Loyalty Points']) || 0,
-                total_spent: parseFloat(row['Total Spent']) || 0.0
-            });
+            // Handle both capitalized and lowercase headers for flexibility
+            console.log('CSV Row:', row); // Debug log
+            const customerData = {
+                name: row.name || row.Name,
+                email: row.email || row.Email,
+                phone: row.phone || row.Phone,
+                address: row.address || row.Address,
+                date_of_birth: row.date_of_birth || row['Date of Birth'] || row.dob,
+                gender: row.gender || row.Gender,
+                loyalty_points: parseInt(row.loyalty_points || row['Loyalty Points']) || 0,
+                total_spent: parseFloat(row.total_spent || row['Total Spent']) || 0.0
+            };
+            
+            console.log('Processed Customer Data:', customerData); // Debug log
+            
+            // Only add if name is provided (required field)
+            if (customerData.name && customerData.name.trim()) {
+                customersToImport.push(customerData);
+            } else {
+                console.warn('Skipping row with missing name:', row);
+            }
         })
         .on('end', async () => {
             try {
                 fs.unlinkSync(req.file.path);
+                console.log('Final customers to import:', customersToImport); // Debug log
                 if (customersToImport.length === 0) {
                     return res.status(400).json({ success: false, message: 'No valid customer data found in CSV.' });
                 }
@@ -57,18 +69,29 @@ exports.importTransactions = async (req, res) => {
     fs.createReadStream(req.file.path)
         .pipe(csv())
         .on('data', (row) => {
-            transactionsToImport.push({
-                customer_id: row['Customer ID'],
-                user_id: row['User ID'],
-                transaction_type: row['Transaction Type'],
-                total_amount: parseFloat(row['Total Amount']),
-                discount_amount: parseFloat(row['Discount Amount']) || 0,
-                tax_amount: parseFloat(row['Tax Amount']) || 0,
-                payment_method: row['Payment Method'],
-                status: row.Status,
-                created_at: row['Created At'],
-                updated_at: row['Updated At']
-            });
+            // Handle both capitalized and lowercase headers for flexibility
+            const transactionData = {
+                customer_id: parseInt(row.customer_id || row['Customer ID']) || null,
+                user_id: parseInt(row.user_id || row['User ID']) || 1, // Default to user 1
+                transaction_type: row.transaction_type || row['Transaction Type'] || 'sale',
+                total_amount: parseFloat(row.total_amount || row['Total Amount']) || 0,
+                discount_amount: parseFloat(row.discount_amount || row['Discount Amount']) || 0,
+                tax_amount: parseFloat(row.tax_amount || row['Tax Amount']) || 0,
+                final_amount: parseFloat(row.final_amount || row['Final Amount']) || parseFloat(row.total_amount || row['Total Amount']) || 0,
+                payment_method: row.payment_method || row['Payment Method'] || 'cash',
+                payment_status: row.payment_status || row['Payment Status'] || 'completed',
+                transaction_status: row.transaction_status || row['Transaction Status'] || row.Status || 'completed',
+                notes: row.notes || row.Notes || '',
+                created_at: row.created_at || row['Created At'] || new Date(),
+                updated_at: row.updated_at || row['Updated At'] || new Date()
+            };
+            
+            // Only add if required fields are provided
+            if (transactionData.customer_id && transactionData.total_amount > 0) {
+                transactionsToImport.push(transactionData);
+            } else {
+                console.warn('Skipping row with missing required data:', row);
+            }
         })
         .on('end', async () => {
             try {
@@ -77,7 +100,7 @@ exports.importTransactions = async (req, res) => {
                     return res.status(400).json({ success: false, message: 'No valid transaction data found in CSV.' });
                 }
                 const createdTransactions = await Transaction.bulkCreate(transactionsToImport, {
-                    updateOnDuplicate: ['customer_id', 'user_id', 'transaction_type', 'total_amount', 'discount_amount', 'tax_amount', 'payment_method', 'status', 'created_at', 'updated_at']
+                    updateOnDuplicate: ['customer_id', 'user_id', 'transaction_type', 'total_amount', 'discount_amount', 'tax_amount', 'final_amount', 'payment_method', 'payment_status', 'transaction_status', 'notes']
                 });
                 res.status(200).json({
                     success: true,
@@ -210,4 +233,76 @@ exports.importProducts = async (req, res) => {
         fs.unlinkSync(filePath);
         return res.status(400).json({ success: false, message: 'Unsupported file type. Please upload a .csv or .xlsx file.' });
     }
+};
+
+exports.importInventoryUpdates = async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No file uploaded.' });
+    }
+    
+    const inventoryUpdates = [];
+    fs.createReadStream(req.file.path)
+        .pipe(csv())
+        .on('data', (row) => {
+            // Handle both capitalized and lowercase headers for flexibility
+            const updateData = {
+                sku: row.sku || row.SKU,
+                stock_quantity: parseInt(row.stock_quantity || row['Stock Quantity']) || 0,
+                cost_price: parseFloat(row.cost_price || row['Cost Price']) || null,
+                selling_price: parseFloat(row.selling_price || row['Selling Price']) || null,
+                reorder_level: parseInt(row.reorder_level || row['Reorder Level']) || null
+            };
+            
+            // Only add if SKU is provided (required field)
+            if (updateData.sku && updateData.sku.trim()) {
+                inventoryUpdates.push(updateData);
+            } else {
+                console.warn('Skipping row with missing SKU:', row);
+            }
+        })
+        .on('end', async () => {
+            try {
+                fs.unlinkSync(req.file.path);
+                
+                if (inventoryUpdates.length === 0) {
+                    return res.status(400).json({ success: false, message: 'No valid inventory data found in CSV.' });
+                }
+                
+                let updatedCount = 0;
+                let notFoundCount = 0;
+                
+                for (const update of inventoryUpdates) {
+                    const product = await Product.findOne({ where: { sku: update.sku } });
+                    
+                    if (product) {
+                        const updateFields = {};
+                        if (update.stock_quantity !== undefined) updateFields.stock_quantity = update.stock_quantity;
+                        if (update.cost_price !== null) updateFields.cost_price = update.cost_price;
+                        if (update.selling_price !== null) updateFields.selling_price = update.selling_price;
+                        if (update.reorder_level !== null) updateFields.reorder_level = update.reorder_level;
+                        
+                        await product.update(updateFields);
+                        updatedCount++;
+                    } else {
+                        console.warn(`Product with SKU ${update.sku} not found`);
+                        notFoundCount++;
+                    }
+                }
+                
+                res.status(200).json({
+                    success: true,
+                    message: `${updatedCount} products updated successfully. ${notFoundCount} products not found.`,
+                    updatedCount,
+                    notFoundCount
+                });
+            } catch (error) {
+                console.error('Error updating inventory:', error);
+                res.status(500).json({ success: false, message: 'Failed to update inventory.', error: error.message });
+            }
+        })
+        .on('error', (error) => {
+            console.error('Error reading CSV file:', error);
+            fs.unlinkSync(req.file.path);
+            res.status(500).json({ success: false, message: 'Error processing CSV file.', error: error.message });
+        });
 };

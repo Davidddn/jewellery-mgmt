@@ -12,6 +12,10 @@ module.exports = (sequelize) => {
         foreignKey: 'user_id',
         as: 'auditLogs'
       });
+      this.hasOne(models.Subscription, {
+        foreignKey: 'user_id',
+        as: 'subscription'
+      });
     }
   }
 

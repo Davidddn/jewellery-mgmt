@@ -61,7 +61,7 @@ const Categories = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 0.5 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5">Categories</Typography>
         <Button startIcon={<Add />} variant="contained" onClick={() => { setEditData(null); setDialogOpen(true); }}>Add Category</Button>

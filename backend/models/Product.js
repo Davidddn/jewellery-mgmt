@@ -1,6 +1,6 @@
 const { Model, DataTypes } = require('sequelize');
 
-module.exports = (sequelize) => {
+module.exports = (sequelize, DataTypes) => {
   class Product extends Model {
     static associate(models) {
       this.hasMany(models.TransactionItem, {

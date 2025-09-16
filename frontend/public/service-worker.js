@@ -1,4 +1,17 @@
-/* eslint-disable no-undef */
+// Advanced offline mutation sync: listen for 'sync' event and process queued mutations
+self.addEventListener('sync', function(event) {
+  if (event.tag === 'sync-mutations') {
+    event.waitUntil(
+      (async () => {
+        const allClients = await clients.matchAll({ includeUncontrolled: true });
+        for (const client of allClients) {
+          client.postMessage({ type: 'PROCESS_OFFLINE_MUTATIONS' });
+        }
+      })()
+    );
+  }
+});
+
 /* global workbox, clients */
 // Handle push notifications
 self.addEventListener('push', function(event) {
@@ -15,13 +28,45 @@ self.addEventListener('push', function(event) {
     body: data.body || '',
     icon: data.icon || '/logo.png',
     badge: data.badge || '/logo.png',
-    data: data.url ? { url: data.url } : undefined
+    data: data.url ? { url: data.url } : undefined,
+    actions: data.actions || [],
+    requireInteraction: data.requireInteraction || false,
+    silent: data.silent || false,
+    vibrate: data.vibrate || [200, 100, 200],
+    tag: data.tag || 'general'
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
+  
+  // Handle action button clicks
+  if (event.action) {
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+        for (let client of windowClients) {
+          if ('focus' in client) {
+            client.focus();
+            // Send action to the client
+            client.postMessage({
+              type: 'NOTIFICATION_ACTION',
+              action: event.action,
+              data: event.notification.data
+            });
+            return;
+          }
+        }
+        // No existing window, open new one
+        if (clients.openWindow) {
+          return clients.openWindow('/');
+        }
+      })
+    );
+    return;
+  }
+  
+  // Handle notification click (no action button)
   const url = event.notification.data && event.notification.data.url;
   if (url) {
     event.waitUntil(
@@ -33,6 +78,18 @@ self.addEventListener('notificationclick', function(event) {
         }
         if (clients.openWindow) {
           return clients.openWindow(url);
+        }
+      })
+    );
+  } else {
+    // Default behavior - focus or open app
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+        if (windowClients.length > 0) {
+          return windowClients[0].focus();
+        }
+        if (clients.openWindow) {
+          return clients.openWindow('/');
         }
       })
     );
@@ -89,9 +146,47 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
-// Listen for skipWaiting message for update UX
+// Listen for skipWaiting and sync notification messages
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+  }
+  // Listen for sync notification events from app
+  if (event.data && event.data.type === 'SYNC_NOTIFICATION') {
+    const { status, message } = event.data;
+    let title = 'Sync Status';
+    let body = message || '';
+    let actions = [];
+    
+    if (status === 'success') {
+      title = 'Sync Complete';
+      body = body || 'All offline changes have been synced.';
+      actions = [
+        { action: 'view', title: 'View Changes' }
+      ];
+    } else if (status === 'conflict') {
+      title = 'Sync Conflict';
+      body = body || 'A conflict was detected during sync.';
+      actions = [
+        { action: 'resolve', title: 'Resolve' },
+        { action: 'dismiss', title: 'Later' }
+      ];
+    } else if (status === 'error') {
+      title = 'Sync Error';
+      body = body || 'Some changes could not be synced.';
+      actions = [
+        { action: 'retry', title: 'Retry' },
+        { action: 'dismiss', title: 'Dismiss' }
+      ];
+    }
+    
+    self.registration.showNotification(title, {
+      body,
+      icon: '/logo.png',
+      badge: '/logo.png',
+      actions,
+      requireInteraction: status === 'conflict',
+      data: { status, originalMessage: message }
+    });
   }
 });

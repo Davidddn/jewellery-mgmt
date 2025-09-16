@@ -24,7 +24,7 @@ import * as yup from 'yup';
 import { useAuth } from '../contexts/useAuth';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import api from '../api';
+import api from '../api/config';
 
 const loginSchema = yup.object().shape({
   username: yup.string().trim().required('Username is required'),
@@ -125,12 +125,16 @@ const Login = () => {
     
     try {
       console.log('Login.jsx: Attempting login with data:', { username: data.username });
-  const response = await api.post('/api/auth/login', {
+      console.log('Login.jsx: API base URL:', api.defaults.baseURL);
+      console.log('Login.jsx: Full URL will be:', api.defaults.baseURL + '/auth/login');
+      
+      const response = await api.post('/auth/login', {
         username: data.username.trim(),
         password: data.password,
       });
       
-      console.log('Login.jsx: API response received:', { success: response.data.success });
+      console.log('Login.jsx: API response received:', response);
+      console.log('Login.jsx: Response data:', response.data);
 
       if (response.data.success && response.data.token && response.data.user) {
         localStorage.setItem('token', response.data.token); // <-- Add this line
@@ -141,11 +145,23 @@ const Login = () => {
         setError(response.data.message || 'Login failed');
       }
     } catch (err) {
-      console.error('Login.jsx: Error during login API call:', err.response?.data || err.message);
-      setError(err.response?.data?.message || 'An error occurred during login');
-      // Add a more descriptive error for network issues
-      if (!err.response) {
-        setError('Network error. Could not connect to the server.');
+      console.error('Login.jsx: Error during login API call:', err);
+      console.error('Login.jsx: Error response:', err.response);
+      console.error('Login.jsx: Error message:', err.message);
+      console.error('Login.jsx: Error config:', err.config);
+      
+      if (err.response) {
+        // Server responded with error status
+        console.error('Login.jsx: Server error:', err.response.status, err.response.data);
+        setError(err.response.data?.message || `Server error: ${err.response.status}`);
+      } else if (err.request) {
+        // Request was made but no response received
+        console.error('Login.jsx: Network error - no response received:', err.request);
+        setError('Network error. Could not connect to the server. Please check if the backend is running.');
+      } else {
+        // Something else happened
+        console.error('Login.jsx: Request setup error:', err.message);
+        setError(`Request error: ${err.message}`);
       }
     }
   };
@@ -184,22 +200,33 @@ const Login = () => {
   }
 
   return (
-    <Container 
-      maxWidth="sm" 
-      sx={{ 
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         px: { xs: 2, sm: 3 },
         py: { xs: 2, sm: 4 }
       }}
     >
-      <Paper 
-        elevation={isMobile ? 1 : 3} 
-        sx={{ 
-          p: { xs: 3, sm: 4 }, 
-          mt: { xs: 4, sm: 8 },
-          mx: { xs: 0, sm: 'auto' },
-          borderRadius: { xs: 2, sm: 1 }
+      <Container 
+        maxWidth="sm"
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
         }}
       >
+        <Paper 
+          elevation={isMobile ? 1 : 3} 
+          sx={{ 
+            p: { xs: 3, sm: 4 }, 
+            width: '100%',
+            maxWidth: 400,
+            borderRadius: { xs: 2, sm: 3 }
+          }}
+        >
         <Typography 
           variant={isMobile ? "h6" : "h5"} 
           component="h1" 
@@ -551,7 +578,9 @@ const Login = () => {
           </Box>
         )}
       </Paper>
-    </Container>
+      
+      </Container>
+    </Box>
   );
 };
 

@@ -10,4 +10,32 @@ export const importProductsCsv = (file) => {
     });
 };
 
-// TODO: Add functions for importing transactions and customers
+export const importCustomersCsv = (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/imports/customers', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
+};
+
+export const importTransactionsCsv = (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/imports/transactions', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
+};
+
+export const importInventoryUpdates = (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/imports/inventory', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
+};

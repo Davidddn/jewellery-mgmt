@@ -15,11 +15,19 @@ api.interceptors.request.use((config) => {
 });
 
 export const productsAPI = {
+  // Get all products (alias for getProducts)
+  getAll: (params = {}) => 
+    api.get('/products', { params }).then(res => res.data),
+
   // Get all products
   getProducts: (params = {}) => 
     api.get('/products', { params }).then(res => res.data),
   
   // Get product by ID
+  getProduct: (id) => 
+    api.get(`/products/${id}`).then(res => res.data),
+
+  // Get product by ID (alias)
   getProductById: (id) => 
     api.get(`/products/${id}`).then(res => res.data),
   

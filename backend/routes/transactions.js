@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const getTransactionsByCustomer = require('../controllers/getTransactionsByCustomer');
 const multer = require('multer');
 const transactionController = require('../controllers/transactionController');
 const {
@@ -12,6 +13,7 @@ const {
 } = transactionController;
 const { protect } = require('../middleware/auth');
 const checkRole = require('../middleware/checkRole');
+const { checkTransactionLimits, consumeUsage } = require('../middleware/subscriptionMiddleware');
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -26,11 +28,14 @@ const upload = multer({ storage: storage });
 // Protect all routes
 router.use(protect);
 
+// Get all transactions for a specific customer (moved after auth middleware)
+router.get('/customer/:customerId', checkRole(['admin', 'manager', 'sales']), getTransactionsByCustomer);
+
 router.route('/')
-  .post(checkRole(['admin', 'sales']), createTransaction)
+  .post(checkRole(['admin', 'sales']), checkTransactionLimits, consumeUsage('transaction'), createTransaction)
   .get(getTransactions);
 
-router.post('/upload/csv', upload.single('csv'), uploadCSV);
+router.post('/upload/csv', checkTransactionLimits, upload.single('csv'), consumeUsage('transaction'), uploadCSV);
 router.get('/export/csv', transactionController.exportCSV);
 
 router.get('/recent', transactionController.getRecentTransactions);

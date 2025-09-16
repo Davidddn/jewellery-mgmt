@@ -6,9 +6,7 @@ const logger = require('../utils/logger');
 const bcrypt = require('bcrypt');
 
 class DatabaseSetup {
-  constructor() {
-    this.sequelize = sequelize;
-  }
+  constructor() {}
 
   async initializeDatabase() {
     try {

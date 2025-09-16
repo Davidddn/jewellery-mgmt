@@ -1,6 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { subscribeUserToPush, unsubscribeUserFromPush } from '../pushNotifications';
-import { useState as useReactState } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import {
   Typography, 
   Box, 
@@ -58,6 +56,7 @@ import { settingsAPI } from '../api/settings';
 import { useForm, Controller } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
+import { NotificationContext } from '../contexts/NotificationContext';
 
 // --- Validation Schemas ---
 const profileSchema = yup.object({
@@ -109,7 +108,7 @@ function TabPanel(props) {
   const { children, value, index, ...other } = props;
   return (
     <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ p: 3, width: '100%', maxWidth: '100%', overflow: 'hidden' }}>{children}</Box>}
     </div>
   );
 }
@@ -119,74 +118,8 @@ const Settings = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Push notification state
-  const [pushEnabled, setPushEnabled] = useState(false);
-  const [pushStatus, setPushStatus] = useReactState(null); // 'success' | 'error' | null
-  const [pushMessage, setPushMessage] = useReactState('');
-  const [testNotifLoading, setTestNotifLoading] = useReactState(false);
-  useEffect(() => {
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
-      navigator.serviceWorker.ready.then(reg => {
-        reg.pushManager.getSubscription().then(sub => {
-          setPushEnabled(!!sub);
-        });
-      });
-    }
-  }, []);
-
-  const handlePushToggle = async (e) => {
-    setPushStatus(null);
-    setPushMessage('');
-    try {
-      if (e.target.checked) {
-        await subscribeUserToPush();
-        setPushEnabled(true);
-        setPushStatus('success');
-        setPushMessage('Push notifications enabled!');
-      } else {
-        await unsubscribeUserFromPush();
-        setPushEnabled(false);
-        setPushStatus('success');
-        setPushMessage('Push notifications disabled.');
-      }
-    } catch {
-      setPushStatus('error');
-      setPushMessage('Failed to update push notification status.');
-    }
-  };
-
-  // Send test notification
-  const sendTestNotification = async () => {
-    setTestNotifLoading(true);
-    setPushStatus(null);
-    setPushMessage('');
-    try {
-      const res = await fetch('http://localhost:5000/api/push/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: 'Test Notification',
-          body: 'This is a test push notification.',
-          url: window.location.origin
-        })
-      });
-      if (res.ok) {
-        setPushStatus('success');
-        setPushMessage('Test notification sent!');
-      } else {
-        setPushStatus('error');
-        setPushMessage('Failed to send test notification.');
-      }
-    } catch {
-      setPushStatus('error');
-      setPushMessage('Failed to send test notification.');
-    } finally {
-      setTestNotifLoading(false);
-    }
-  };
-
   // 1. HOOKS AND STATE
-  const { user, logout, isLoading: isAuthLoading } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const queryClient = useQueryClient();
   const [currentTab, setCurrentTab] = useState(0);
   const [errorAlert, setErrorAlert] = useState('');
@@ -201,6 +134,9 @@ const Settings = () => {
   const [selectedLogoForPreview, setSelectedLogoForPreview] = useState(null);
   const [logoManagementOpen, setLogoManagementOpen] = useState(false); // ADD THIS
   const [uploadPreview, setUploadPreview] = useState(null); // ADD THIS
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false); // ADD THIS
+  const { showSnackbar } = useContext(NotificationContext);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, action: null });
 
   // 2. FORMS (DECLARED BEFORE DATA FETCHING)
   const { control: profileControl, handleSubmit: handleProfileSubmit, reset: resetProfileForm, formState: { errors: profileErrors } } = useForm({
@@ -238,11 +174,23 @@ const Settings = () => {
   });
 
   // 3. DATA FETCHING (BEFORE EFFECTS THAT USE THE DATA)
-  const { data: usersData, isLoading: isUsersLoading } = useQuery({
+  const { data: usersData, isLoading: isUsersLoading, error: usersError } = useQuery({
     queryKey: ['users', userFilters],
-    queryFn: () => usersAPI.getAllUsers(userFilters),
+    queryFn: async () => {
+      try {
+        const result = await usersAPI.getAllUsers(userFilters);
+        return result;
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        throw error;
+      }
+    },
     enabled: user?.role === 'admin',
+    retry: 2,
+    retryDelay: 1000,
   });
+
+
 
   const { data: logoData, isLoading: isLogoLoading } = useQuery({
     queryKey: ['logo', logoRefreshKey],
@@ -250,8 +198,7 @@ const Settings = () => {
     retry: 2,
     retryDelay: 1000,
     refetchOnWindowFocus: false,
-    staleTime: 0, // Always fetch fresh data
-    cacheTime: 0  // Don't cache the logo data
+    staleTime: 0 // Always fetch fresh data
   });
 
   const { data: settingsData, isLoading: areSettingsLoading } = useQuery({
@@ -266,95 +213,267 @@ const Settings = () => {
   });
 
   // 4. MUTATIONS
-  const updateProfileMutation = useMutation({
-    mutationFn: authAPI.updateProfile,
+  const restoreDatabaseMutation = useMutation({
+    mutationFn: settingsAPI.restoreDatabase,
     onSuccess: () => {
-      queryClient.invalidateQueries(['profile']);
-      setSuccessAlert('Profile updated successfully!');
+      showSnackbar('Database restored successfully! Please refresh the page.', 'success');
+      queryClient.clear();
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
     },
-    onError: (err) => setErrorAlert(err.response?.data?.message || 'Failed to update profile.'),
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to restore database.', 'error'),
   });
-  
-  const changePasswordMutation = useMutation({
-    mutationFn: (passwordData) => authAPI.changePassword(passwordData),
+
+  // Add missing mutations
+  const updateProfileMutation = useMutation({
+    mutationFn: (data) => authAPI.updateProfile(data),
     onSuccess: () => {
-      setSuccessAlert('Password changed successfully! Please log in again.');
-      resetPasswordForm();
-      setTimeout(() => logout(), 3000);
+      showSnackbar('Profile updated successfully!', 'success');
+      queryClient.invalidateQueries(['user']);
     },
-    onError: (err) => setErrorAlert(err.response?.data?.message || 'Failed to change password.'),
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to update profile.', 'error'),
+  });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: (data) => authAPI.changePassword(data),
+    onSuccess: () => {
+      showSnackbar('Password changed successfully!', 'success');
+      resetPasswordForm();
+    },
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to change password.', 'error'),
+  });
+
+  const updateSettingsMutation = useMutation({
+    mutationFn: (data) => settingsAPI.updateSettings(data),
+    onSuccess: () => {
+      showSnackbar('Settings updated successfully!', 'success');
+      queryClient.invalidateQueries(['settings']);
+    },
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to update settings.', 'error'),
   });
 
   const createUserMutation = useMutation({
-    mutationFn: usersAPI.createUser,
+    mutationFn: (userData) => usersAPI.createUser(userData),
     onSuccess: () => {
+      showSnackbar('User created successfully!', 'success');
       queryClient.invalidateQueries(['users']);
-      setSuccessAlert('User created successfully!');
-      setUserDialogOpen(false);
+      handleCloseUserDialog();
     },
-    onError: (err) => setErrorAlert(err.response?.data?.message || 'Failed to create user.'),
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to create user.', 'error'),
   });
 
   const updateUserMutation = useMutation({
     mutationFn: ({ id, userData }) => usersAPI.updateUser(id, userData),
     onSuccess: () => {
+      showSnackbar('User updated successfully!', 'success');
       queryClient.invalidateQueries(['users']);
-      setSuccessAlert('User updated successfully!');
-      setUserDialogOpen(false);
+      handleCloseUserDialog();
     },
-    onError: (err) => setErrorAlert(err.response?.data?.message || 'Failed to update user.'),
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to update user.', 'error'),
   });
-  
+
   const deleteUserMutation = useMutation({
-    mutationFn: usersAPI.deleteUser,
+    mutationFn: (userId) => usersAPI.deleteUser(userId),
     onSuccess: () => {
+      showSnackbar('User deleted successfully!', 'success');
       queryClient.invalidateQueries(['users']);
-      setSuccessAlert('User deleted successfully!');
     },
-    onError: (err) => setErrorAlert(err.response?.data?.message || 'Failed to delete user.'),
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to delete user.', 'error'),
   });
 
   const uploadLogoMutation = useMutation({
-    mutationFn: settingsAPI.uploadLogo,
+    mutationFn: (file) => settingsAPI.uploadLogo(file),
     onSuccess: () => {
-      setSuccessAlert('Logo uploaded successfully!');
+      showSnackbar('Logo uploaded successfully!', 'success');
+      setLogoRefreshKey(prev => prev + 1);
       setLogoFile(null);
-      setUploadPreview(null); // Clear upload preview
-    
-      // Force refresh the logo with a small delay
-      setTimeout(() => {
-        setLogoRefreshKey(prev => prev + 1);
-        queryClient.invalidateQueries(['logo']);
-        queryClient.invalidateQueries(['all-logos']);
-        queryClient.refetchQueries(['logo']);
-        queryClient.refetchQueries(['all-logos']);
-      }, 1000);
+      setUploadPreview(null);
+      queryClient.invalidateQueries(['logo']);
+      queryClient.invalidateQueries(['all-logos']);
     },
-    onError: (error) => {
-      setErrorAlert('Failed to upload logo: ' + (error.response?.data?.message || error.message));
-    }
-  });
-
-  const updateSettingsMutation = useMutation({
-    mutationFn: settingsAPI.updateSettings,
-    onSuccess: () => {
-      queryClient.invalidateQueries(['settings']);
-      setSuccessAlert('Settings updated successfully!');
-    },
-    onError: (err) => setErrorAlert(err.response?.data?.message || 'Failed to update settings.'),
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to upload logo.', 'error'),
   });
 
   const setActiveLogoMutation = useMutation({
-    mutationFn: settingsAPI.setActiveLogo,
+    mutationFn: (filename) => settingsAPI.setActiveLogo(filename),
     onSuccess: () => {
-      setSuccessAlert('Active logo updated successfully!');
+      showSnackbar('Logo set as active successfully!', 'success');
       setLogoRefreshKey(prev => prev + 1);
       queryClient.invalidateQueries(['logo']);
-      queryClient.refetchQueries(['logo']);
+      queryClient.invalidateQueries(['all-logos']);
     },
-    onError: (error) => {
-      setErrorAlert('Failed to set active logo: ' + (error.response?.data?.message || error.message));
-    }
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to set active logo.', 'error'),
+  });
+
+  const resetSettingsMutation = useMutation({
+    mutationFn: () => settingsAPI.resetSettings(),
+    onSuccess: () => {
+      showSnackbar('Settings reset successfully!', 'success');
+      queryClient.invalidateQueries(['settings']);
+    },
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to reset settings.', 'error'),
+  });
+
+  const clearAllDataMutation = useMutation({
+    mutationFn: () => settingsAPI.clearAllData(),
+    onSuccess: () => {
+      showSnackbar('All data cleared successfully!', 'success');
+      queryClient.clear();
+    },
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to clear data.', 'error'),
+  });
+
+  const factoryResetMutation = useMutation({
+    mutationFn: () => settingsAPI.factoryReset(),
+    onSuccess: () => {
+      showSnackbar('Factory reset completed successfully!', 'success');
+      queryClient.clear();
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    },
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to perform factory reset.', 'error'),
+  });
+
+  // Data Export Mutations
+  const exportAllDataMutation = useMutation({
+    mutationFn: settingsAPI.exportAllData,
+    onSuccess: (data) => {
+      // Create download link
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `all-data-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      showSnackbar('All data exported successfully!', 'success');
+    },
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to export data.', 'error'),
+  });
+
+  const exportProductsMutation = useMutation({
+    mutationFn: settingsAPI.exportProducts,
+    onSuccess: (data) => {
+      const blob = new Blob([data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `products-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      showSnackbar('Products exported successfully!', 'success');
+    },
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to export products.', 'error'),
+  });
+
+  const exportCustomersMutation = useMutation({
+    mutationFn: settingsAPI.exportCustomers,
+    onSuccess: (data) => {
+      const blob = new Blob([data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `customers-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      showSnackbar('Customers exported successfully!', 'success');
+    },
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to export customers.', 'error'),
+  });
+
+  const exportTransactionsMutation = useMutation({
+    mutationFn: settingsAPI.exportTransactions,
+    onSuccess: (data) => {
+      const blob = new Blob([data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `transactions-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      showSnackbar('Transactions exported successfully!', 'success');
+    },
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to export transactions.', 'error'),
+  });
+
+  // Database Operations Mutations
+  const backupDatabaseMutation = useMutation({
+    mutationFn: settingsAPI.backupDatabase,
+    onSuccess: (data) => {
+      const blob = new Blob([data], { type: 'application/sql' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `database-backup-${new Date().toISOString().split('T')[0]}.sql`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      showSnackbar('Database backup created successfully!', 'success');
+    },
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to create backup.', 'error'),
+  });
+
+  // Data Cleanup Mutations
+  const cleanDuplicatesMutation = useMutation({
+    mutationFn: settingsAPI.cleanDuplicates,
+    onSuccess: (data) => {
+      showSnackbar(`Cleaned ${data.removed || 0} duplicate records successfully!`, 'success');
+      queryClient.invalidateQueries();
+    },
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to clean duplicates.', 'error'),
+  });
+
+  const archiveOldDataMutation = useMutation({
+    mutationFn: settingsAPI.archiveOldData,
+    onSuccess: (data) => {
+      showSnackbar(`Archived ${data.archived || 0} old records successfully!`, 'success');
+      queryClient.invalidateQueries();
+    },
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to archive data.', 'error'),
+  });
+
+  const rebuildIndexesMutation = useMutation({
+    mutationFn: settingsAPI.rebuildIndexes,
+    onSuccess: () => {
+      showSnackbar('Database indexes rebuilt successfully!', 'success');
+    },
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to rebuild indexes.', 'error'),
+  });
+
+  const validateDataMutation = useMutation({
+    mutationFn: settingsAPI.validateData,
+    onSuccess: (data) => {
+      showSnackbar(`Data validation completed! Found ${data.issues || 0} issues.`, data.issues > 0 ? 'warning' : 'success');
+    },
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to validate data.', 'error'),
+  });
+
+  const updateStatisticsMutation = useMutation({
+    mutationFn: settingsAPI.updateStatistics,
+    onSuccess: () => {
+      showSnackbar('Database statistics updated successfully!', 'success');
+    },
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to update statistics.', 'error'),
+  });
+
+  const syncInventoryMutation = useMutation({
+    mutationFn: settingsAPI.syncInventory,
+    onSuccess: (data) => {
+      showSnackbar(`Inventory sync completed! Updated ${data.updated || 0} items.`, 'success');
+      queryClient.invalidateQueries(['products']);
+    },
+    onError: (err) => showSnackbar(err.response?.data?.message || 'Failed to sync inventory.', 'error'),
   });
 
   // 5. EFFECTS (AFTER DATA FETCHING)
@@ -371,7 +490,6 @@ const Settings = () => {
 
   useEffect(() => {
     if (settingsData) {
-      console.log('📝 Populating settings form with data:', settingsData);
       resetSettingsForm({
         shop_name: settingsData.shop_name || '',
         shop_address: settingsData.shop_address || '',
@@ -477,8 +595,25 @@ const Settings = () => {
   };
 
   const handleDeleteUser = (userId) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
+    setConfirmDialog({ open: true, action: 'delete', userId });
+  };
+
+  const handleConfirmAction = async () => {
+    const action = confirmDialog.action;
+    const userId = confirmDialog.userId;
+    const file = confirmDialog.file;
+    setConfirmDialog({ open: false, action: null, file: null, userId: null });
+    
+    if (action === 'delete' && userId) {
       deleteUserMutation.mutate(userId);
+    } else if (action === 'reset') {
+      resetSettingsMutation.mutate();
+    } else if (action === 'clearData') {
+      clearAllDataMutation.mutate();
+    } else if (action === 'factoryReset') {
+      factoryResetMutation.mutate();
+    } else if (action === 'restore' && file) {
+      restoreDatabaseMutation.mutate(file);
     }
   };
 
@@ -504,6 +639,14 @@ const Settings = () => {
     if (logoFile) {
       uploadLogoMutation.mutate(logoFile);
     }
+  };
+
+  const handleOpenSettingsDialog = () => {
+    setSettingsDialogOpen(true);
+  };
+
+  const handleCloseSettingsDialog = () => {
+    setSettingsDialogOpen(false);
   };
 
   const formatFileSize = (bytes) => {
@@ -539,56 +682,110 @@ const Settings = () => {
 
   // 8. RENDER
   return (
-    <Box sx={{ p: isMobile ? 1 : 0 }}>
-      <Box sx={{ mb: 3 }}>
-        <FormControlLabel
-          control={<Switch checked={pushEnabled} onChange={handlePushToggle} />}
-          label="Enable Push Notifications"
-        />
-        {pushStatus && (
-          <Alert severity={pushStatus} sx={{ mt: 2 }}>{pushMessage}</Alert>
-        )}
-        <Button
-          variant="outlined"
-          color="primary"
-          sx={{ mt: 2 }}
-          onClick={sendTestNotification}
-          disabled={!pushEnabled || testNotifLoading}
-        >
-          {testNotifLoading ? <CircularProgress size={20} /> : 'Send Test Notification'}
-        </Button>
-      </Box>
-      {/* Header */}
-      <Box sx={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: 1, 
-        mb: 3 
-      }}>
-        <Typography variant={isMobile ? "h5" : "h4"} sx={{ fontWeight: 'bold' }}>
-          Settings
-        </Typography>
-      </Box>
-      
-      {/* Success/Error Alerts */}
-      {errorAlert && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorAlert('')}>
-          {errorAlert}
-        </Alert>
-      )}
+    <Box sx={{ width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
+      {/* Alert Messages */}
       {successAlert && (
         <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessAlert('')}>
           {successAlert}
         </Alert>
       )}
+      {errorAlert && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorAlert('')}>
+          {errorAlert}
+        </Alert>
+      )}
 
-      <Paper 
-        elevation={isMobile ? 1 : 2}
-        sx={{ 
-          overflow: 'hidden',
-          borderRadius: isMobile ? 2 : 1
-        }}
-      >
+      {/* Confirmation Dialog for Destructive Actions */}
+      <Dialog open={confirmDialog.open} onClose={() => setConfirmDialog({ open: false, action: null })}>
+        <DialogTitle>
+          {confirmDialog.action === 'reset' && '⚠️ Confirm Settings Reset'}
+          {confirmDialog.action === 'clearData' && '🗑️ Confirm Data Deletion'}
+          {confirmDialog.action === 'factoryReset' && '💥 Confirm Factory Reset'}
+          {confirmDialog.action === 'restore' && '🔄 Confirm Database Restore'}
+          {!['reset', 'clearData', 'factoryReset', 'restore'].includes(confirmDialog.action) && 'Confirm Action'}
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 2 }}>
+            {confirmDialog.action === 'reset' && 
+              'Are you sure you want to reset all business settings to their default values? This action cannot be undone.'
+            }
+            {confirmDialog.action === 'clearData' && 
+              'Are you sure you want to delete ALL data including products, customers, transactions, and sales records? This action is PERMANENT and cannot be undone.'
+            }
+            {confirmDialog.action === 'factoryReset' && 
+              'Are you sure you want to perform a complete factory reset? This will delete ALL data, reset ALL settings, and return the system to its initial state. This action is PERMANENT and cannot be undone.'
+            }
+            {confirmDialog.action === 'restore' && 
+              `Are you sure you want to restore the database from "${confirmDialog.file?.name}"? This will OVERWRITE ALL current data and cannot be undone.`
+            }
+            {!['reset', 'clearData', 'factoryReset', 'restore'].includes(confirmDialog.action) && 
+              'Are you sure you want to proceed with this action?'
+            }
+          </Typography>
+          {(confirmDialog.action === 'clearData' || confirmDialog.action === 'factoryReset' || confirmDialog.action === 'restore') && (
+            <Box sx={{ p: 2, bgcolor: 'error.50', borderRadius: 1, border: '1px solid', borderColor: 'error.200' }}>
+              <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold' }}>
+                ⚠️ WARNING: This action is irreversible!
+              </Typography>
+              <Typography variant="body2" color="error.main">
+                Please ensure you have a recent backup before proceeding.
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialog({ open: false, action: null })}>Cancel</Button>
+          <Button 
+            onClick={handleConfirmAction} 
+            color="error" 
+            variant="contained"
+            disabled={
+              (confirmDialog.action === 'reset' && resetSettingsMutation.isLoading) ||
+              (confirmDialog.action === 'clearData' && clearAllDataMutation.isLoading) ||
+              (confirmDialog.action === 'factoryReset' && factoryResetMutation.isLoading) ||
+              (confirmDialog.action === 'restore' && restoreDatabaseMutation.isLoading)
+            }
+          >
+            {(confirmDialog.action === 'reset' && resetSettingsMutation.isLoading) ||
+             (confirmDialog.action === 'clearData' && clearAllDataMutation.isLoading) ||
+             (confirmDialog.action === 'factoryReset' && factoryResetMutation.isLoading) ||
+             (confirmDialog.action === 'restore' && restoreDatabaseMutation.isLoading)
+              ? 'Processing...' : 'Confirm'
+            }
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Header */}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: { xs: 'flex-start', sm: 'center' },
+        flexDirection: { xs: 'column', sm: 'row' },
+        mb: 3,
+        gap: { xs: 2, sm: 1 },
+        px: 0.5,
+        py: 2
+      }}>
+        <Typography 
+          variant={isMobile ? "h5" : "h4"} 
+          fontWeight="bold"
+          sx={{ fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' } }}
+        >
+          Settings
+        </Typography>
+      </Box>
+      
+      <Box sx={{ px: 0.5 }}>
+        <Paper 
+          elevation={isMobile ? 1 : 2}
+          sx={{ 
+            overflow: 'hidden',
+            borderRadius: { xs: 2, sm: 1 },
+            width: '100%',
+            maxWidth: '100%'
+          }}
+        >
         <Tabs 
           value={currentTab} 
           onChange={handleTabChange}
@@ -613,203 +810,212 @@ const Settings = () => {
         {/* General Settings */}
         <TabPanel value={currentTab} index={0}>
           <Box sx={{ p: isMobile ? 2 : 3 }}>
-            <Typography variant="h6" sx={{ mb: 2, fontSize: isMobile ? '1.1rem' : '1.25rem' }}>
-              Business Information
-            </Typography>
-            <Box component="form" onSubmit={handleSettingsSubmit(onSettingsSave)} noValidate sx={{ mt: 1 }}>
-              <Grid container spacing={isMobile ? 2 : 3}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h6" sx={{ fontSize: isMobile ? '1.1rem' : '1.25rem' }}>
+                Business Information
+              </Typography>
+              <Button 
+                variant="contained" 
+                startIcon={<EditIcon />} 
+                onClick={handleOpenSettingsDialog}
+                size={isMobile ? "small" : "medium"}
+              >
+                Edit Settings
+              </Button>
+            </Box>
+
+            {/* Display current settings in read-only format */}
+            {areSettingsLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <Grid container spacing={3}>
               {/* Basic Information */}
               <Grid item xs={12}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>Basic Information</Typography>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Controller name="shop_name" control={settingsControl} render={({ field }) => 
-                  <TextField {...field} fullWidth label="Shop Name" error={!!settingsErrors.shop_name} helperText={settingsErrors.shop_name?.message} />
-                } />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Controller name="gst_percentage" control={settingsControl} render={({ field }) => 
-                  <TextField {...field} fullWidth label="GST Percentage" type="number" error={!!settingsErrors.gst_percentage} helperText={settingsErrors.gst_percentage?.message} />
-                } />
-              </Grid>
-              <Grid item xs={12}>
-                <Controller name="shop_address" control={settingsControl} render={({ field }) => 
-                  <TextField {...field} fullWidth label="Shop Address" multiline rows={3} error={!!settingsErrors.shop_address} helperText={settingsErrors.shop_address?.message} />
-                } />
+                <Paper sx={{ p: 3, mb: 2 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>
+                    Basic Information
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="textSecondary">Shop Name</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                        {settingsData?.shop_name || 'Not set'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="textSecondary">GST Percentage</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                        {settingsData?.gst_percentage ? `${settingsData.gst_percentage}%` : 'Not set'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Typography variant="body2" color="textSecondary">Shop Address</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                        {settingsData?.shop_address || 'Not set'}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </Paper>
               </Grid>
 
               {/* Contact Information */}
               <Grid item xs={12}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, mt: 2 }}>Contact Information</Typography>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Controller name="phone" control={settingsControl} render={({ field }) => 
-                  <TextField {...field} fullWidth label="Phone Number" />
-                } />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Controller name="email" control={settingsControl} render={({ field }) => 
-                  <TextField {...field} fullWidth label="Email Address" type="email" />
-                } />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Controller name="website" control={settingsControl} render={({ field }) => 
-                  <TextField {...field} fullWidth label="Website URL" />
-                } />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Controller name="established_year" control={settingsControl} render={({ field }) => 
-                  <TextField {...field} fullWidth label="Established Year" type="number" />
-                } />
+                <Paper sx={{ p: 3, mb: 2 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>
+                    Contact Information
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="textSecondary">Phone Number</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                        {settingsData?.phone || 'Not set'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="textSecondary">Email Address</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                        {settingsData?.email || 'Not set'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="textSecondary">Website</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                        {settingsData?.website || 'Not set'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="textSecondary">Established Year</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                        {settingsData?.established_year || 'Not set'}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </Paper>
               </Grid>
 
               {/* Legal Information */}
               <Grid item xs={12}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, mt: 2 }}>Legal & Tax Information</Typography>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Controller name="gst_number" control={settingsControl} render={({ field }) => 
-                  <TextField {...field} fullWidth label="GST Number" />
-                } />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Controller name="pan_number" control={settingsControl} render={({ field }) => 
-                  <TextField {...field} fullWidth label="PAN Number" />
-                } />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Controller name="tax_number" control={settingsControl} render={({ field }) => 
-                  <TextField {...field} fullWidth label="Tax Registration Number" />
-                } />
+                <Paper sx={{ p: 3, mb: 2 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>
+                    Legal & Tax Information
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="textSecondary">GST Number</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                        {settingsData?.gst_number || 'Not set'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="textSecondary">PAN Number</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                        {settingsData?.pan_number || 'Not set'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="textSecondary">Tax Registration Number</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                        {settingsData?.tax_number || 'Not set'}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </Paper>
               </Grid>
 
               {/* Banking Information */}
               <Grid item xs={12}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, mt: 2 }}>Banking Information</Typography>
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <Controller name="bank_name" control={settingsControl} render={({ field }) => 
-                  <TextField {...field} fullWidth label="Bank Name" />
-                } />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <Controller name="bank_account" control={settingsControl} render={({ field }) => 
-                  <TextField {...field} fullWidth label="Account Number" />
-                } />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <Controller name="bank_ifsc" control={settingsControl} render={({ field }) => 
-                  <TextField {...field} fullWidth label="IFSC Code" />
-                } />
+                <Paper sx={{ p: 3 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>
+                    Banking Information
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={4}>
+                      <Typography variant="body2" color="textSecondary">Bank Name</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                        {settingsData?.bank_name || 'Not set'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <Typography variant="body2" color="textSecondary">Account Number</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                        {settingsData?.bank_account || 'Not set'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <Typography variant="body2" color="textSecondary">IFSC Code</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                        {settingsData?.bank_ifsc || 'Not set'}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </Paper>
               </Grid>
 
-              {/* Submit Button */}
+              {/* Company Logo */}
               <Grid item xs={12}>
-                <Button 
-                  type="submit" 
-                  variant="contained" 
-                  size="large"
-                  disabled={updateSettingsMutation.isLoading}
-                  sx={{ mt: 2 }}
-                >
-                  {updateSettingsMutation.isLoading ? 'Saving...' : 'Save All Settings'}
-                </Button>
+                <Paper sx={{ p: 3 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>
+                    Company Logo
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
+                    <Box sx={{ border: '2px dashed #ccc', p: 2, borderRadius: 2, minWidth: 200, textAlign: 'center' }}>
+                      {isLogoLoading ? (
+                        <CircularProgress />
+                      ) : logoPreview ? (
+                        <img 
+                          key={logoRefreshKey}
+                          src={logoPreview} 
+                          alt="Company Logo" 
+                          style={{ 
+                            maxWidth: '200px', 
+                            maxHeight: '100px', 
+                            display: 'block',
+                            objectFit: 'contain',
+                            margin: '0 auto'
+                          }}
+                          onError={(e) => {
+                            console.error('Logo image failed to load');
+                            e.target.style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <Box sx={{ 
+                          width: '200px', 
+                          height: '100px', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          bgcolor: 'grey.100',
+                          color: 'grey.500',
+                          fontSize: '14px',
+                          border: '1px dashed #ccc',
+                          margin: '0 auto'
+                        }}>
+                          No Logo Selected
+                        </Box>
+                      )}
+                    </Box>
+                    <Box>
+                      <Button 
+                        variant="contained" 
+                        startIcon={<CloudUploadIcon />}
+                        onClick={handleOpenLogoManagement}
+                        size={isMobile ? "small" : "medium"}
+                        sx={{ mb: 1 }}
+                      >
+                        Manage Logos
+                      </Button>
+                      <Typography variant="caption" color="textSecondary" sx={{ display: 'block' }}>
+                        Upload new logos or select from existing ones
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Paper>
               </Grid>
             </Grid>
-          </Box>
-
-          {/* Current Settings Display */}
-          <Box sx={{ mt: 4 }}>
-            <Typography variant="h6" gutterBottom>Current Settings</Typography>
-            <Paper sx={{ p: 2 }}>
-              {areSettingsLoading ? (
-                <CircularProgress />
-              ) : settingsData ? (
-                <Grid container spacing={2}>
-                  {Object.entries(settingsData).map(([key, value]) => (
-                    <Grid item xs={12} sm={6} md={4} key={key}>
-                      <Box sx={{ p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
-                        <Typography variant="caption" color="textSecondary" component="span">
-                          {key.replace(/_/g, ' ').toUpperCase()}
-                        </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 'medium' }} component="span">
-                          {value || 'Not set'}
-                        </Typography>
-                      </Box>
-                    </Grid>
-                  ))}
-                </Grid>
-              ) : (
-                <Typography variant="body2" color="textSecondary">
-                  No settings found. Please save some settings first.
-                </Typography>
-              )}
-            </Paper>
-          </Box>
-
-          {/* Logo Section */}
-          <Box sx={{ mt: 4 }}>
-            <Typography variant="h6" gutterBottom>Company Logo</Typography>
-            
-            {/* Current Active Logo */}
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>Current Active Logo</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <Box sx={{ border: '2px dashed #ccc', p: 2, borderRadius: 2, minWidth: 200, textAlign: 'center' }}>
-                  {isLogoLoading ? (
-                    <CircularProgress />
-                  ) : logoPreview ? (
-                    <img 
-                      key={logoRefreshKey}
-                      src={logoPreview} 
-                      alt="Company Logo" 
-                      style={{ 
-                        maxWidth: '200px', 
-                        maxHeight: '100px', 
-                        display: 'block',
-                        objectFit: 'contain',
-                        margin: '0 auto'
-                      }}
-                      onError={(e) => {
-                        console.error('Logo image failed to load');
-                        e.target.style.display = 'none';
-                      }}
-                    />
-                  ) : (
-                    <Box sx={{ 
-                      width: '200px', 
-                      height: '100px', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center',
-                      bgcolor: 'grey.100',
-                      color: 'grey.500',
-                      fontSize: '14px',
-                      border: '1px dashed #ccc',
-                      margin: '0 auto'
-                    }}>
-                      No Logo Selected
-                    </Box>
-                  )}
-                </Box>
-                <Box>
-                  <Button 
-                    variant="contained" 
-                    startIcon={<CloudUploadIcon />}
-                    onClick={handleOpenLogoManagement}
-                    sx={{ mb: 1 }}
-                  >
-                    Manage Logos
-                  </Button>
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="caption" color="textSecondary">
-                      Upload new logos or select from existing ones
-                    </Typography>
-                  </Box>
-                </Box>
-              </Box>
-            </Paper>
-          </Box>
+            )}
           </Box>
         </TabPanel>
 
@@ -916,15 +1122,45 @@ const Settings = () => {
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
                 <CircularProgress />
               </Box>
+            ) : usersError ? (
+              <Paper sx={{ p: 3, textAlign: 'center' }}>
+                <Typography variant="h6" color="error" gutterBottom>
+                  Failed to Load Users
+                </Typography>
+                <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                  {usersError?.response?.data?.message || usersError?.message || 'An unknown error occurred'}
+                </Typography>
+                <Button 
+                  variant="contained" 
+                  onClick={() => window.location.reload()}
+                  sx={{ mr: 2 }}
+                >
+                  Refresh Page
+                </Button>
+                <Button 
+                  variant="outlined" 
+                  onClick={() => queryClient.invalidateQueries(['users'])}
+                >
+                  Retry Loading
+                </Button>
+                {import.meta.env.DEV && (
+                  <Box component="pre" sx={{ mt: 2, fontSize: '0.75rem', textAlign: 'left', bgcolor: '#f5f5f5', p: 2, borderRadius: 1, overflow: 'auto' }}>
+                    {JSON.stringify(usersError, null, 2)}
+                  </Box>
+                )}
+              </Paper>
             ) : (
               <Box sx={{ 
                 overflowX: 'auto',
+                width: '100%',
                 '& .MuiTableContainer-root': {
                   borderRadius: 2
                 }
               }}>
-                <TableContainer component={Paper} sx={{ overflowX: 'auto',
-                  minWidth: { xs: 700, md: 'auto' }
+                <TableContainer component={Paper} sx={{ 
+                  overflowX: 'auto',
+                  width: '100%',
+                  maxWidth: '100%'
                 }}>
                   <Table stickyHeader>
                     <TableHead>
@@ -953,67 +1189,185 @@ const Settings = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {Array.isArray(usersData?.users) && usersData.users.map((u) => (
-                        <TableRow key={u.id}>
-                          <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
-                            <Typography variant="body2" noWrap sx={{ 
-                              maxWidth: { xs: '120px', md: '200px' },
-                              fontSize: { xs: '0.75rem', md: '0.875rem' }
-                            }}>
-                              {`${u.firstName} ${u.lastName}`}
+                      {Array.isArray(usersData?.users) ? (
+                        usersData.users.length > 0 ? (
+                          usersData.users.map((u) => (
+                            <TableRow key={u.id}>
+                              <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                <Typography variant="body2" noWrap sx={{ 
+                                  maxWidth: { xs: '120px', md: '200px' },
+                                  fontSize: { xs: '0.75rem', md: '0.875rem' }
+                                }}>
+                                  {`${u.firstName} ${u.lastName}`}
+                                </Typography>
+                              </TableCell>
+                              <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                {u.username}
+                              </TableCell>
+                              <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                <Typography variant="body2" noWrap sx={{ 
+                                  maxWidth: { xs: '150px', md: '250px' },
+                                  fontSize: { xs: '0.75rem', md: '0.875rem' }
+                                }}>
+                                  {u.email}
+                                </Typography>
+                              </TableCell>
+                              <TableCell sx={{ 
+                                textTransform: 'capitalize',
+                                fontSize: { xs: '0.75rem', md: '0.875rem' }
+                              }}>
+                                {u.role}
+                              </TableCell>
+                              <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                <Chip 
+                                  label={u.is_active ? 'Active' : 'Inactive'}
+                                  color={u.is_active ? 'success' : 'default'}
+                                  size={isMobile ? "small" : "medium"}
+                                  sx={{ fontSize: { xs: '0.625rem', md: '0.75rem' } }}
+                                />
+                              </TableCell>
+                              <TableCell align="right">
+                                <Box sx={{ 
+                                  display: 'flex', 
+                                  gap: { xs: 0.5, md: 1 },
+                                  justifyContent: 'center'
+                                }}>
+                                  <IconButton 
+                                    onClick={() => handleOpenUserDialog(u)} 
+                                    color="primary" 
+                                    disabled={u.id === user.id}
+                                    size={isMobile ? "small" : "medium"}
+                                  >
+                                    <EditIcon />
+                                  </IconButton>
+                                  <IconButton 
+                                    onClick={() => handleDeleteUser(u.id)} 
+                                    color="error" 
+                                    disabled={u.id === user.id}
+                                    size={isMobile ? "small" : "medium"}
+                                  >
+                                    <DeleteIcon />
+                                  </IconButton>
+                                </Box>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                No users found with current filters
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      ) : Array.isArray(usersData) ? (
+                        usersData.length > 0 ? (
+                          usersData.map((u) => (
+                            <TableRow key={u.id}>
+                              <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                <Typography variant="body2" noWrap sx={{ 
+                                  maxWidth: { xs: '120px', md: '200px' },
+                                  fontSize: { xs: '0.75rem', md: '0.875rem' }
+                                }}>
+                                  {`${u.firstName} ${u.lastName}`}
+                                </Typography>
+                              </TableCell>
+                              <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                {u.username}
+                              </TableCell>
+                              <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                <Typography variant="body2" noWrap sx={{ 
+                                  maxWidth: { xs: '150px', md: '250px' },
+                                  fontSize: { xs: '0.75rem', md: '0.875rem' }
+                                }}>
+                                  {u.email}
+                                </Typography>
+                              </TableCell>
+                              <TableCell sx={{ 
+                                textTransform: 'capitalize',
+                                fontSize: { xs: '0.75rem', md: '0.875rem' }
+                              }}>
+                                {u.role}
+                              </TableCell>
+                              <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                                <Chip 
+                                  label={u.is_active ? 'Active' : 'Inactive'}
+                                  color={u.is_active ? 'success' : 'default'}
+                                  size={isMobile ? "small" : "medium"}
+                                  sx={{ fontSize: { xs: '0.625rem', md: '0.75rem' } }}
+                                />
+                              </TableCell>
+                              <TableCell align="right">
+                                <Box sx={{ 
+                                  display: 'flex', 
+                                  gap: { xs: 0.5, md: 1 },
+                                  justifyContent: 'center'
+                                }}>
+                                  <IconButton 
+                                    onClick={() => handleOpenUserDialog(u)} 
+                                    color="primary" 
+                                    disabled={u.id === user.id}
+                                    size={isMobile ? "small" : "medium"}
+                                  >
+                                    <EditIcon />
+                                  </IconButton>
+                                  <IconButton 
+                                    onClick={() => handleDeleteUser(u.id)} 
+                                    color="error" 
+                                    disabled={u.id === user.id}
+                                    size={isMobile ? "small" : "medium"}
+                                  >
+                                    <DeleteIcon />
+                                  </IconButton>
+                                </Box>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                              <Typography variant="body2" color="textSecondary">
+                                No users found
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                            <Typography variant="body2" color="error" gutterBottom>
+                              Error loading users. The data format is unexpected.
                             </Typography>
-                          </TableCell>
-                          <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
-                            {u.username}
-                          </TableCell>
-                          <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
-                            <Typography variant="body2" noWrap sx={{ 
-                              maxWidth: { xs: '150px', md: '250px' },
-                              fontSize: { xs: '0.75rem', md: '0.875rem' }
-                            }}>
-                              {u.email}
+                            <Typography variant="caption" color="textSecondary" sx={{ mb: 2, display: 'block' }}>
+                              Expected: Array of users or object with 'users' property
                             </Typography>
-                          </TableCell>
-                          <TableCell sx={{ 
-                            textTransform: 'capitalize',
-                            fontSize: { xs: '0.75rem', md: '0.875rem' }
-                          }}>
-                            {u.role}
-                          </TableCell>
-                          <TableCell sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
-                            <Chip 
-                              label={u.is_active ? 'Active' : 'Inactive'}
-                              color={u.is_active ? 'success' : 'default'}
-                              size={isMobile ? "small" : "medium"}
-                              sx={{ fontSize: { xs: '0.625rem', md: '0.75rem' } }}
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            <Box sx={{ 
-                              display: 'flex', 
-                              gap: { xs: 0.5, md: 1 },
-                              justifyContent: 'center'
-                            }}>
-                              <IconButton 
-                                onClick={() => handleOpenUserDialog(u)} 
-                                color="primary" 
-                                disabled={u.id === user.id}
-                                size={isMobile ? "small" : "medium"}
-                              >
-                                <EditIcon />
-                              </IconButton>
-                              <IconButton 
-                                onClick={() => handleDeleteUser(u.id)} 
-                                color="error" 
-                                disabled={u.id === user.id}
-                                size={isMobile ? "small" : "medium"}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </Box>
+                            <Button 
+                              variant="outlined" 
+                              size="small"
+                              onClick={() => queryClient.invalidateQueries(['users'])}
+                              sx={{ mr: 1 }}
+                            >
+                              Retry
+                            </Button>
+                            <Button 
+                              variant="outlined" 
+                              size="small"
+                              onClick={() => window.location.reload()}
+                            >
+                              Refresh Page
+                            </Button>
+                            {import.meta.env.DEV && (
+                              <Box component="pre" sx={{ mt: 2, fontSize: '0.75rem', textAlign: 'left', bgcolor: '#f5f5f5', p: 2, borderRadius: 1, overflow: 'auto', maxHeight: '200px' }}>
+                                <strong>usersData:</strong> {JSON.stringify(usersData, null, 2)}
+                                <br/><strong>userFilters:</strong> {JSON.stringify(userFilters, null, 2)}
+                                <br/><strong>user.role:</strong> {user?.role}
+                                <br/><strong>Query enabled:</strong> {user?.role === 'admin'}
+                              </Box>
+                            )}
                           </TableCell>
                         </TableRow>
-                      ))}
+                      )}
                     </TableBody>
                   </Table>
                 </TableContainer>
@@ -1026,18 +1380,332 @@ const Settings = () => {
         {user?.role === 'admin' && (
           <TabPanel value={currentTab} index={4}>
             <Typography variant="h6" gutterBottom>Data Management</Typography>
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="body1" gutterBottom>
-                You can export various reports and data from the system in CSV format.
-                Please navigate to the <a href="/reports">Reports</a> section to download sales, inventory, and customer data.
+            
+            {/* Data Export Section */}
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>
+                Data Export
               </Typography>
-              <Button variant="contained" sx={{ mt: 2 }} onClick={() => window.location.href = '/reports'}>
-                Go to Reports
-              </Button>
-            </Box>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6} md={3}>
+                  <Card sx={{ height: '100%', border: '1px solid #e0e0e0' }}>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom color="primary">
+                        📊 All Data
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                        Export complete database including all products, customers, sales, and settings
+                      </Typography>
+                      <Button 
+                        variant="outlined" 
+                        fullWidth 
+                        disabled={exportAllDataMutation.isLoading}
+                        onClick={() => exportAllDataMutation.mutate()}
+                      >
+                        {exportAllDataMutation.isLoading ? '⏳ Exporting...' : 'Export All Data'}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                
+                <Grid item xs={12} sm={6} md={3}>
+                  <Card sx={{ height: '100%', border: '1px solid #e0e0e0' }}>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom color="primary">
+                        💎 Products
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                        Export product catalog, prices, stock levels, and categories
+                      </Typography>
+                      <Button 
+                        variant="outlined" 
+                        fullWidth
+                        disabled={exportProductsMutation.isLoading}
+                        onClick={() => exportProductsMutation.mutate()}
+                      >
+                        {exportProductsMutation.isLoading ? '⏳ Exporting...' : 'Export Products'}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                
+                <Grid item xs={12} sm={6} md={3}>
+                  <Card sx={{ height: '100%', border: '1px solid #e0e0e0' }}>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom color="primary">
+                        👥 Customers
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                        Export customer information, contact details, and purchase history
+                      </Typography>
+                      <Button 
+                        variant="outlined" 
+                        fullWidth
+                        disabled={exportCustomersMutation.isLoading}
+                        onClick={() => exportCustomersMutation.mutate()}
+                      >
+                        {exportCustomersMutation.isLoading ? '⏳ Exporting...' : 'Export Customers'}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                
+                <Grid item xs={12} sm={6} md={3}>
+                  <Card sx={{ height: '100%', border: '1px solid #e0e0e0' }}>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom color="primary">
+                        💰 Transactions
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                        Export all sales transactions, payments, and invoices
+                      </Typography>
+                      <Button 
+                        variant="outlined" 
+                        fullWidth
+                        disabled={exportTransactionsMutation.isLoading}
+                        onClick={() => exportTransactionsMutation.mutate()}
+                      >
+                        {exportTransactionsMutation.isLoading ? '⏳ Exporting...' : 'Export Sales'}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* Data Backup Section */}
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>
+                Database Backup & Restore
+              </Typography>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <Box sx={{ p: 2, bgcolor: '#f8f9fa', borderRadius: 2 }}>
+                    <Typography variant="h6" gutterBottom>
+                      💾 Create Backup
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                      Create a full backup of your database including all products, customers, sales, and settings.
+                    </Typography>
+                    <Button 
+                      variant="contained" 
+                      color="primary"
+                      fullWidth
+                      sx={{ mb: 1 }}
+                      disabled={backupDatabaseMutation.isLoading}
+                      onClick={() => backupDatabaseMutation.mutate()}
+                    >
+                      {backupDatabaseMutation.isLoading ? '⏳ Creating...' : 'Create Full Backup'}
+                    </Button>
+                    <Typography variant="caption" color="textSecondary">
+                      Last backup: Never • Recommended: Weekly
+                    </Typography>
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Box sx={{ p: 2, bgcolor: '#fff3e0', borderRadius: 2, border: '1px solid #ffcc02' }}>
+                    <Typography variant="h6" gutterBottom color="warning.main">
+                      ⚠️ Restore Database
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                      Restore your database from a previous backup. This will overwrite all current data.
+                    </Typography>
+                    <input
+                      type="file"
+                      accept=".sql,.backup"
+                      style={{ display: 'none' }}
+                      id="restore-backup-input"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          setConfirmDialog({ 
+                            open: true, 
+                            action: 'restore',
+                            file: file
+                          });
+                        }
+                      }}
+                    />
+                    <Button 
+                      variant="outlined" 
+                      color="warning"
+                      fullWidth
+                      sx={{ mb: 1 }}
+                      onClick={() => document.getElementById('restore-backup-input').click()}
+                    >
+                      Choose Backup File
+                    </Button>
+                    <Typography variant="caption" color="warning.main">
+                      ⚠️ This action cannot be undone
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* Data Cleanup Section */}
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>
+                Data Cleanup & Maintenance
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <List>
+                    <ListItem>
+                      <ListItemText 
+                        primary="🧹 Clean Duplicate Records"
+                        secondary="Remove duplicate customers, products, or transactions"
+                      />
+                      <Button 
+                        variant="outlined" 
+                        size="small"
+                        disabled={cleanDuplicatesMutation.isLoading}
+                        onClick={() => cleanDuplicatesMutation.mutate()}
+                      >
+                        {cleanDuplicatesMutation.isLoading ? 'Cleaning...' : 'Clean Duplicates'}
+                      </Button>
+                    </ListItem>
+                    <Divider />
+                    <ListItem>
+                      <ListItemText 
+                        primary="🗑️ Archive Old Data"
+                        secondary="Archive transactions older than 2 years"
+                      />
+                      <Button 
+                        variant="outlined" 
+                        size="small"
+                        disabled={archiveOldDataMutation.isLoading}
+                        onClick={() => archiveOldDataMutation.mutate()}
+                      >
+                        {archiveOldDataMutation.isLoading ? 'Archiving...' : 'Archive Data'}
+                      </Button>
+                    </ListItem>
+                    <Divider />
+                    <ListItem>
+                      <ListItemText 
+                        primary="📊 Rebuild Indexes"
+                        secondary="Optimize database performance"
+                      />
+                      <Button 
+                        variant="outlined" 
+                        size="small"
+                        disabled={rebuildIndexesMutation.isLoading}
+                        onClick={() => rebuildIndexesMutation.mutate()}
+                      >
+                        {rebuildIndexesMutation.isLoading ? 'Rebuilding...' : 'Rebuild Indexes'}
+                      </Button>
+                    </ListItem>
+                  </List>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <List>
+                    <ListItem>
+                      <ListItemText 
+                        primary="🔍 Data Validation"
+                        secondary="Check for inconsistent or invalid data"
+                      />
+                      <Button 
+                        variant="outlined" 
+                        size="small"
+                        disabled={validateDataMutation.isLoading}
+                        onClick={() => validateDataMutation.mutate()}
+                      >
+                        {validateDataMutation.isLoading ? 'Validating...' : 'Validate Data'}
+                      </Button>
+                    </ListItem>
+                    <Divider />
+                    <ListItem>
+                      <ListItemText 
+                        primary="📈 Update Statistics"
+                        secondary="Refresh database statistics for better performance"
+                      />
+                      <Button 
+                        variant="outlined" 
+                        size="small"
+                        disabled={updateStatisticsMutation.isLoading}
+                        onClick={() => updateStatisticsMutation.mutate()}
+                      >
+                        {updateStatisticsMutation.isLoading ? 'Updating...' : 'Update Stats'}
+                      </Button>
+                    </ListItem>
+                    <Divider />
+                    <ListItem>
+                      <ListItemText 
+                        primary="🔄 Sync Inventory"
+                        secondary="Recalculate stock levels and fix discrepancies"
+                      />
+                      <Button 
+                        variant="outlined" 
+                        size="small"
+                        disabled={syncInventoryMutation.isLoading}
+                        onClick={() => syncInventoryMutation.mutate()}
+                      >
+                        {syncInventoryMutation.isLoading ? 'Syncing...' : 'Sync Inventory'}
+                      </Button>
+                    </ListItem>
+                  </List>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* Danger Zone */}
+            <Paper sx={{ p: 3, border: '2px solid #f44336', bgcolor: '#fef5f5' }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'error.main' }}>
+                ⚠️ Danger Zone
+              </Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+                These actions are permanent and cannot be undone. Please proceed with extreme caution.
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6} md={4}>
+                  <Button 
+                    variant="outlined" 
+                    color="error"
+                    fullWidth
+                    onClick={() => setConfirmDialog({ open: true, action: 'reset' })}
+                  >
+                    🔄 Reset All Settings
+                  </Button>
+                  <Typography variant="caption" color="error" sx={{ display: 'block', mt: 1 }}>
+                    Reset all business settings to default
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6} md={4}>
+                  <Button 
+                    variant="outlined" 
+                    color="error"
+                    fullWidth
+                    disabled={user?.role !== 'admin' || clearAllDataMutation.isLoading}
+                    onClick={() => setConfirmDialog({ open: true, action: 'clearData' })}
+                  >
+                    {clearAllDataMutation.isLoading ? '🔄 Clearing...' : '🗑️ Clear All Data'}
+                  </Button>
+                  <Typography variant="caption" color="error" sx={{ display: 'block', mt: 1 }}>
+                    Delete all products, customers, and sales
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6} md={4}>
+                  <Button 
+                    variant="outlined" 
+                    color="error"
+                    fullWidth
+                    disabled={user?.role !== 'admin' || factoryResetMutation.isLoading}
+                    onClick={() => setConfirmDialog({ open: true, action: 'factoryReset' })}
+                  >
+                    {factoryResetMutation.isLoading ? '🔄 Resetting...' : '💥 Factory Reset'}
+                  </Button>
+                  <Typography variant="caption" color="error" sx={{ display: 'block', mt: 1 }}>
+                    Reset entire system to initial state
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Paper>
           </TabPanel>
         )}
       </Paper>
+      </Box>
 
       {/* Add/Edit User Dialog */}
   <Dialog open={userDialogOpen} onClose={handleCloseUserDialog} maxWidth="sm" fullWidth fullScreen={isMobile}>
@@ -1433,6 +2101,202 @@ const Settings = () => {
             </Button>
           )}
         </DialogActions>
+      </Dialog>
+
+      {/* Settings Edit Dialog */}
+      <Dialog 
+        open={settingsDialogOpen} 
+        onClose={handleCloseSettingsDialog} 
+        maxWidth="md" 
+        fullWidth 
+        fullScreen={isMobile}
+      >
+        <DialogTitle>
+          Edit Business Settings
+        </DialogTitle>
+        <Box component="form" onSubmit={handleSettingsSubmit(onSettingsSave)}>
+          <DialogContent>
+            <Grid container spacing={3}>
+              {/* Basic Information */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, color: 'primary.main' }}>
+                  Basic Information
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller 
+                  name="shop_name" 
+                  control={settingsControl} 
+                  render={({ field }) => 
+                    <TextField 
+                      {...field} 
+                      fullWidth 
+                      label="Shop Name" 
+                      error={!!settingsErrors.shop_name} 
+                      helperText={settingsErrors.shop_name?.message} 
+                    />
+                  } 
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller 
+                  name="gst_percentage" 
+                  control={settingsControl} 
+                  render={({ field }) => 
+                    <TextField 
+                      {...field} 
+                      fullWidth 
+                      label="GST Percentage" 
+                      type="number" 
+                      error={!!settingsErrors.gst_percentage} 
+                      helperText={settingsErrors.gst_percentage?.message} 
+                    />
+                  } 
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <Controller 
+                  name="shop_address" 
+                  control={settingsControl} 
+                  render={({ field }) => 
+                    <TextField 
+                      {...field} 
+                      fullWidth 
+                      label="Shop Address" 
+                      multiline 
+                      rows={3} 
+                      error={!!settingsErrors.shop_address} 
+                      helperText={settingsErrors.shop_address?.message} 
+                    />
+                  } 
+                />
+              </Grid>
+
+              {/* Contact Information */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, mt: 2, color: 'primary.main' }}>
+                  Contact Information
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller 
+                  name="phone" 
+                  control={settingsControl} 
+                  render={({ field }) => 
+                    <TextField {...field} fullWidth label="Phone Number" />
+                  } 
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller 
+                  name="email" 
+                  control={settingsControl} 
+                  render={({ field }) => 
+                    <TextField {...field} fullWidth label="Email Address" type="email" />
+                  } 
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller 
+                  name="website" 
+                  control={settingsControl} 
+                  render={({ field }) => 
+                    <TextField {...field} fullWidth label="Website URL" />
+                  } 
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller 
+                  name="established_year" 
+                  control={settingsControl} 
+                  render={({ field }) => 
+                    <TextField {...field} fullWidth label="Established Year" type="number" />
+                  } 
+                />
+              </Grid>
+
+              {/* Legal Information */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, mt: 2, color: 'primary.main' }}>
+                  Legal & Tax Information
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller 
+                  name="gst_number" 
+                  control={settingsControl} 
+                  render={({ field }) => 
+                    <TextField {...field} fullWidth label="GST Number" />
+                  } 
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller 
+                  name="pan_number" 
+                  control={settingsControl} 
+                  render={({ field }) => 
+                    <TextField {...field} fullWidth label="PAN Number" />
+                  } 
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Controller 
+                  name="tax_number" 
+                  control={settingsControl} 
+                  render={({ field }) => 
+                    <TextField {...field} fullWidth label="Tax Registration Number" />
+                  } 
+                />
+              </Grid>
+
+              {/* Banking Information */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2, mt: 2, color: 'primary.main' }}>
+                  Banking Information
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller 
+                  name="bank_name" 
+                  control={settingsControl} 
+                  render={({ field }) => 
+                    <TextField {...field} fullWidth label="Bank Name" />
+                  } 
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller 
+                  name="bank_account" 
+                  control={settingsControl} 
+                  render={({ field }) => 
+                    <TextField {...field} fullWidth label="Account Number" />
+                  } 
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Controller 
+                  name="bank_ifsc" 
+                  control={settingsControl} 
+                  render={({ field }) => 
+                    <TextField {...field} fullWidth label="IFSC Code" />
+                  } 
+                />
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseSettingsDialog}>
+              Cancel
+            </Button>
+            <Button 
+              type="submit" 
+              variant="contained" 
+              disabled={updateSettingsMutation.isLoading}
+            >
+              {updateSettingsMutation.isLoading ? 'Saving...' : 'Save Settings'}
+            </Button>
+          </DialogActions>
+        </Box>
       </Dialog>
     </Box>
   );

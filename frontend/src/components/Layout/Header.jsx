@@ -8,6 +8,7 @@ import {
   Avatar, 
   Menu, 
   MenuItem,
+  useTheme,
 } from '@mui/material';
 import { 
   Menu as MenuIcon, 
@@ -21,12 +22,13 @@ import { useLocation } from 'react-router-dom';
 import { useCustomTheme } from '../../contexts/CustomThemeContext';
 import { useNotifications } from '../../hooks/useNotifications';
 
-const Header = ({ onSidebarToggle, isMobile }) => {
+const Header = ({ onSidebarToggle, isMobile, isSidebarOpen }) => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [anchorEl, setAnchorEl] = React.useState(null);
   const { mode, toggleTheme } = useCustomTheme();
   const { NotificationBell } = useNotifications();
+  const theme = useTheme();
 
   const handleMenu = (event) => setAnchorEl(event.currentTarget);
   const handleClose = () => setAnchorEl(null);
@@ -42,50 +44,60 @@ const Header = ({ onSidebarToggle, isMobile }) => {
     logout();
   };
 
+  const getUserInitials = () => {
+    if (user?.firstName && user?.lastName) {
+      return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`;
+    }
+    return user?.firstName?.charAt(0) || user?.username?.charAt(0) || 'U';
+  };
+
   return (
-    <AppBar
+        <AppBar
       position="fixed"
-      sx={(theme) => ({
-        boxShadow: 'none',
-        borderBottom: `1px solid ${theme.palette.divider}`,
-        backgroundColor: 'background.paper',
+      elevation={0}
+      sx={{
+        bgcolor: 'background.paper',
         color: 'text.primary',
+        borderBottom: 1,
+        borderColor: 'divider',
         zIndex: theme.zIndex.drawer + 1,
-        width: { xs: '100%', sm: `calc(100% - 240px)` },
-        ml: { xs: 0, sm: '240px' },
-        transition: theme.transitions.create(['width', 'margin'], {
-          easing: theme.transitions.easing.sharp,
-          duration: theme.transitions.duration.leavingScreen,
-        }),
-      })}
+        width: isSidebarOpen && !isMobile ? 'calc(100% - 240px)' : '100%',
+        ml: isSidebarOpen && !isMobile ? '240px' : 0,
+        // Remove transition for instant repositioning
+        transition: 'none',
+      }}
     >
-      <Toolbar sx={{ 
-        minHeight: { xs: 56, sm: 64 }, // Responsive toolbar height
-        px: { xs: 1, sm: 2 }, // Responsive padding
-        pl: { xs: 1, sm: 0 } // Remove extra left padding on desktop
-      }}>
+      <Toolbar 
+        sx={{ 
+          minHeight: { xs: 56, sm: 64 },
+          px: { xs: 2, sm: 3 },
+          gap: 2,
+        }}
+      >
         <IconButton
           color="inherit"
           aria-label="toggle sidebar"
           edge="start"
           onClick={onSidebarToggle}
           sx={{ 
-            mr: { xs: 1, sm: 2 },
-            p: { xs: 1, sm: 1.5 }
+            p: 1.5,
+            borderRadius: 2,
+            '&:hover': {
+              bgcolor: 'action.hover',
+            }
           }}
         >
           <MenuIcon />
         </IconButton>
         
         <Typography 
-          variant={isMobile ? "subtitle1" : "h6"} 
+          variant={isMobile ? "h6" : "h5"} 
           noWrap 
-          component="div" 
+          component="h1" 
           sx={{ 
-            flexGrow: 1, 
-            display: 'flex', 
-            alignItems: 'center',
-            fontSize: { xs: '1rem', sm: '1.25rem' }
+            flexGrow: 1,
+            fontWeight: 600,
+            color: 'text.primary',
           }}
         >
           {getPageTitle()}
@@ -94,7 +106,7 @@ const Header = ({ onSidebarToggle, isMobile }) => {
         <Box sx={{ 
           display: 'flex', 
           alignItems: 'center',
-          gap: { xs: 0.5, sm: 1 }
+          gap: 1,
         }}>
           {/* Notifications */}
           <NotificationBell />
@@ -103,37 +115,66 @@ const Header = ({ onSidebarToggle, isMobile }) => {
           <IconButton 
             onClick={toggleTheme} 
             color="inherit"
-            sx={{ p: { xs: 1, sm: 1.5 } }}
+            sx={{ 
+              p: 1.5,
+              borderRadius: 2,
+              '&:hover': {
+                bgcolor: 'action.hover',
+              }
+            }}
             aria-label="toggle theme"
           >
             {mode === 'dark' ? <Brightness7 /> : <Brightness4 />}
           </IconButton>
           
-          {/* User Info - Show differently on mobile */}
+          {/* User Info - Show name on desktop */}
           {!isMobile && (
-            <Typography 
-              sx={{ 
-                mr: 1.5, 
-                display: { xs: 'none', sm: 'block' },
-                fontSize: { sm: '0.875rem', md: '1rem' }
-              }}
-            >
-              {user?.firstName || 'User'}
-            </Typography>
+            <Box sx={{ 
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              mr: 1,
+            }}>
+              <Typography 
+                variant="body2"
+                fontWeight={500}
+                color="text.primary"
+              >
+                {user?.firstName || user?.username || 'User'}
+              </Typography>
+              <Typography 
+                variant="caption"
+                color="text.secondary"
+              >
+                {user?.role?.charAt(0).toUpperCase() + user?.role?.slice(1) || 'User'}
+              </Typography>
+            </Box>
           )}
           
           {/* User Avatar */}
           <IconButton 
             onClick={handleMenu} 
-            sx={{ p: { xs: 0.5, sm: 0 } }}
+            sx={{ 
+              p: 0,
+              '&:hover': {
+                '& .MuiAvatar-root': {
+                  boxShadow: theme.shadows[4],
+                }
+              }
+            }}
             aria-label="user menu"
           >
-            <Avatar sx={{ 
-              width: { xs: 32, sm: 40 }, 
-              height: { xs: 32, sm: 40 },
-              fontSize: { xs: '0.875rem', sm: '1rem' }
-            }}>
-              {user?.firstName?.charAt(0) || 'U'}
+            <Avatar 
+              sx={{ 
+                width: { xs: 36, sm: 40 }, 
+                height: { xs: 36, sm: 40 },
+                bgcolor: 'primary.main',
+                fontSize: { xs: '0.875rem', sm: '1rem' },
+                fontWeight: 600,
+                transition: 'box-shadow 0.2s ease-in-out',
+              }}
+            >
+              {getUserInitials()}
             </Avatar>
           </IconButton>
           
@@ -151,26 +192,48 @@ const Header = ({ onSidebarToggle, isMobile }) => {
             }}
             sx={{
               '& .MuiPaper-root': {
-                minWidth: { xs: 150, sm: 180 }
+                minWidth: 200,
+                mt: 1,
+                borderRadius: 2,
+                boxShadow: theme.shadows[8],
               }
             }}
           >
             {/* Show user info on mobile in menu */}
             {isMobile && (
-              <MenuItem disabled sx={{ opacity: 1 }}>
-                <Person sx={{ mr: 1 }} />
+              <MenuItem disabled sx={{ 
+                opacity: 1, 
+                py: 2,
+                borderBottom: 1,
+                borderColor: 'divider',
+                mb: 1,
+              }}>
+                <Person sx={{ mr: 1.5, color: 'text.secondary' }} />
                 <Box>
-                  <Typography variant="body2" fontWeight="medium">
-                    {user?.firstName || 'User'}
+                  <Typography variant="body2" fontWeight={600}>
+                    {user?.firstName || user?.username || 'User'}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     {user?.email}
                   </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    {user?.role?.charAt(0).toUpperCase() + user?.role?.slice(1) || 'User'}
+                  </Typography>
                 </Box>
               </MenuItem>
             )}
-            <MenuItem onClick={handleLogout}>
-              <LogoutIcon sx={{ mr: 1 }} />
+            <MenuItem 
+              onClick={handleLogout}
+              sx={{
+                py: 1.5,
+                color: 'error.main',
+                '&:hover': {
+                  bgcolor: 'error.light',
+                  color: 'error.contrastText',
+                }
+              }}
+            >
+              <LogoutIcon sx={{ mr: 1.5 }} />
               Logout
             </MenuItem>
           </Menu>

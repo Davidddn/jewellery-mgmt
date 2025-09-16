@@ -3,7 +3,7 @@ import api from './config';
 export const loyaltyAPI = {
   // Get loyalty by customer
   getLoyaltyByCustomer: async (customerId) => {
-    const response = await api.get(`/loyalty/customer/${customerId}`);
+    const response = await api.get(`/loyalty/${customerId}`);
     return response.data;
   },
 
@@ -12,15 +12,15 @@ export const loyaltyAPI = {
     const response = await api.post(`/loyalty/add`, {
       customer_id: customerId,
       points,
-      transactionId
+      transaction_id: transactionId
     });
     return response.data;
   },
 
   // Redeem loyalty points
   redeemLoyaltyPoints: async (customerId, points) => {
-    const response = await api.post(`/loyalty/customer/${customerId}/redeem-points`, {
-      points
+    const response = await api.post(`/loyalty/redeem/${customerId}`, {
+      points_to_redeem: points
     });
     return response.data;
   },
@@ -45,7 +45,7 @@ export const loyaltyAPI = {
 
   // Get loyalty history
   getLoyaltyHistory: async (customerId) => {
-    const response = await api.get(`/loyalty/customer/${customerId}/history`);
+    const response = await api.get(`/loyalty/history/${customerId}`);
     return response.data;
   },
 

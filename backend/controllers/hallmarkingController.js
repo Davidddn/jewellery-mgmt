@@ -71,8 +71,8 @@ exports.getAllHallmarking = async (req, res) => {
     const hallmarking = await Hallmarking.findAll({
       include: [{
         model: Product,
-        as: 'product',
-        attributes: ['name', 'purity'] // Include necessary product attributes
+        as: 'Product',
+        attributes: ['name', 'sku', 'purity', 'weight', 'metal_type'] // Include necessary product attributes
       }],
       order: [['certification_date', 'DESC']]
     });

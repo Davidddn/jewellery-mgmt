@@ -1,7 +1,4 @@
-const { sequelize } = require('../config/database');
-const User = require('../models/User');
-const Product = require('../models/Product');
-const Customer = require('../models/Customer');
+
 const logger = require('../utils/logger');
 
 async function setupDatabase() {

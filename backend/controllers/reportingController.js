@@ -158,8 +158,19 @@ exports.getSalesAnalytics = async (req, res) => {
     if (start_date && end_date) {
       const startDate = new Date(start_date);
       const endDate = new Date(end_date);
+      // Make end date inclusive by adding one day and using < instead of <=
+      endDate.setDate(endDate.getDate() + 1);
+      
+      console.log('Date range for sales analytics:', {
+        start_date,
+        end_date,
+        startDateObj: startDate.toISOString(),
+        endDateObj: endDate.toISOString()
+      });
+      
       transactionWhereClause.created_at = {
-        [Op.between]: [startDate, endDate],
+        [Op.gte]: startDate,
+        [Op.lt]: endDate,
       };
     }
 

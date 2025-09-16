@@ -1,19 +1,477 @@
-// Custom offline fallback page for PWA
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Offline - Jewellery Management</title>
-  <style>
-    body { font-family: sans-serif; text-align: center; padding: 2rem; background: #fffbe6; }
-    h1 { color: #d4af37; }
-    img { width: 100px; margin: 2rem 0; }
+  <title>Offline - Jewellery Management System</title>
+  <meta name="description" content="Jewellery Management System - Offline Mode">
+  <link rel="icon" href="/favicon.ico" type="image/x-    <div class="action-buttons">
+      <button class="action-btn" onclick="goToApp()">
+        🏠 Go to App
+      </button>
+      <button class="action-btn" onclick="openCachedData('products')">
+        📦 View Products
+      </button>
+      <button class="action-btn" onclick="openCachedData('customers')">
+        👥 View Customers
+      </button>
+      <button class="action-btn" onclick="openCachedData('transactions')">
+        💰 View Sales
+      </button>
+    </div>style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+      overflow: hidden;
+    }
+
+    .offline-container {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 3rem 2rem;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      max-width: 500px;
+      width: 90%;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .offline-container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #d4af37, #f7dc6f, #d4af37);
+    }
+
+    .logo-container {
+      margin-bottom: 2rem;
+      position: relative;
+    }
+
+    .logo {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, #d4af37, #f7dc6f);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1rem;
+      box-shadow: 0 10px 20px rgba(212, 175, 55, 0.3);
+      animation: pulse 2s infinite;
+    }
+
+    .logo-icon {
+      font-size: 2rem;
+      color: white;
+      font-weight: bold;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+
+    .brand-name {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #2c3e50;
+      margin-bottom: 0.5rem;
+    }
+
+    .brand-subtitle {
+      font-size: 0.9rem;
+      color: #7f8c8d;
+      margin-bottom: 2rem;
+    }
+
+    .offline-icon {
+      font-size: 4rem;
+      color: #e74c3c;
+      margin-bottom: 1rem;
+      animation: bounce 1s infinite alternate;
+    }
+
+    @keyframes bounce {
+      from { transform: translateY(0px); }
+      to { transform: translateY(-10px); }
+    }
+
+    h1 {
+      color: #2c3e50;
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      font-weight: 600;
+    }
+
+    .description {
+      color: #5d6d7e;
+      font-size: 1.1rem;
+      line-height: 1.6;
+      margin-bottom: 2rem;
+    }
+
+    .features-list {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin: 2rem 0 1rem 0;
+      text-align: left;
+    }
+
+    .sync-info {
+      background: linear-gradient(135deg, #e8f4f8, #f0f8ff);
+      border: 1px solid #b8d4da;
+      border-radius: 12px;
+      padding: 1.2rem;
+      margin: 1rem 0 2rem 0;
+      text-align: center;
+    }
+
+    .sync-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #2c3e50;
+      margin-bottom: 0.5rem;
+    }
+
+    .pending-counter {
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: #e67e22;
+      margin-bottom: 0.5rem;
+    }
+
+    .sync-note {
+      font-size: 0.85rem;
+      color: #5d6d7e;
+      font-style: italic;
+    }
+
+    .features-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #2c3e50;
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 0.8rem;
+      color: #34495e;
+    }
+
+    .feature-icon {
+      color: #27ae60;
+      margin-right: 0.8rem;
+      font-weight: bold;
+    }
+
+    .retry-button {
+      background: linear-gradient(135deg, #3498db, #2980b9);
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      border-radius: 25px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin: 1rem 0.5rem 0.5rem 0.5rem;
+    }
+
+    .action-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.5rem;
+      margin: 1rem 0;
+    }
+
+    .action-btn {
+      background: linear-gradient(135deg, #27ae60, #2ecc71);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      min-width: 120px;
+    }
+
+    .action-btn:hover,
+    .retry-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+    }
+
+    .action-btn:hover {
+      box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
+    }
+
+    .status-indicator {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 1rem;
+      padding: 8px 16px;
+      background: #fff3cd;
+      border: 1px solid #ffeaa7;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      color: #856404;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #e17055;
+      margin-right: 8px;
+      animation: blink 1.5s infinite;
+    }
+
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0.3; }
+    }
+
+    @media (max-width: 480px) {
+      .offline-container {
+        padding: 2rem 1.5rem;
+      }
+      
+      h1 {
+        font-size: 1.5rem;
+      }
+      
+      .description {
+        font-size: 1rem;
+      }
+
+      .action-buttons {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .action-btn {
+        width: 200px;
+        margin: 0.25rem 0;
+      }
+
+      .retry-button {
+        width: 200px;
+        margin: 1rem auto 0.5rem auto;
+        display: block;
+      }
+    }
   </style>
 </head>
 <body>
-  <img src="/logo.png" alt="Jewellery Logo">
-  <h1>You're Offline</h1>
-  <p>It looks like you lost your internet connection.<br>Don't worry, you can still browse some features offline.</p>
+  <div class="offline-container">
+    <div class="logo-container">
+      <div class="logo">
+        <span class="logo-icon">💎</span>
+      </div>
+      <div class="brand-name">Jewellery Management</div>
+      <div class="brand-subtitle">Professional Jewellery Store System</div>
+    </div>
+
+    <div class="offline-icon">📡</div>
+    
+    <h1>You're Offline</h1>
+    
+    <p class="description">
+      It looks like you've lost your internet connection.<br>
+      Don't worry, you can still access some features offline.
+    </p>
+
+    <div class="features-list">
+      <div class="features-title">Available Offline Features:</div>
+      <div class="feature-item">
+        <span class="feature-icon">✓</span>
+        <span>View cached product catalog</span>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">✓</span>
+        <span>Browse recent transactions</span>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">✓</span>
+        <span>Access customer database</span>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">✓</span>
+        <span>Create offline sales drafts</span>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">✓</span>
+        <span>Generate temporary invoices</span>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">✓</span>
+        <span>View inventory snapshots</span>
+      </div>
+    </div>
+
+    <div class="sync-info">
+      <div class="sync-title">📋 Pending Actions</div>
+      <div id="pending-count" class="pending-counter">0 items waiting to sync</div>
+      <div class="sync-note">Your changes will be automatically synced when you're back online</div>
+    </div>
+
+    <button class="retry-button" onclick="checkConnection()">
+      🔄 Try Again
+    </button>
+
+    <div class="action-buttons">
+      <button class="action-btn" onclick="openCachedData('products')">
+        📦 View Products
+      </button>
+      <button class="action-btn" onclick="openCachedData('customers')">
+        � View Customers
+      </button>
+      <button class="action-btn" onclick="openCachedData('transactions')">
+        💰 View Sales
+      </button>
+    </div>
+
+    <div class="status-indicator">
+      <span class="status-dot"></span>
+      <span>Offline Mode Active</span>
+    </div>
+  </div>
+
+  <script>
+    // Check connection status
+    function updateConnectionStatus() {
+      if (navigator.onLine) {
+        window.location.reload();
+      }
+    }
+
+    // Try to go to main app anyway (might work with cached data)
+    function goToApp() {
+      window.location.href = '/dashboard';
+    }
+
+    // Enhanced connection check
+    function checkConnection() {
+      const button = document.querySelector('.retry-button');
+      button.innerHTML = '🔄 Checking...';
+      button.disabled = true;
+      
+      // Try to fetch a small resource to verify real connectivity
+      fetch('/manifest.json?t=' + Date.now(), { 
+        method: 'HEAD',
+        cache: 'no-cache'
+      })
+      .then(() => {
+        button.innerHTML = '✅ Connected!';
+        setTimeout(() => window.location.reload(), 1000);
+      })
+      .catch(() => {
+        button.innerHTML = '❌ Still Offline';
+        setTimeout(() => {
+          button.innerHTML = '🔄 Try Again';
+          button.disabled = false;
+        }, 2000);
+      });
+    }
+
+    // Open cached data (placeholder - would integrate with your app's offline storage)
+    function openCachedData(type) {
+      // In a real implementation, this would access IndexedDB or localStorage
+      // and open the cached data in a new page or modal
+      alert(`Opening cached ${type} data...\n\nThis would show your offline-available ${type} from local storage.`);
+      
+      // Example of what this might do:
+      // window.open(`/offline-${type}.html`, '_blank');
+    }
+
+    // Check and display pending sync items
+    function updatePendingCount() {
+      try {
+        // Check localStorage for pending mutations (from your offline sync system)
+        const pendingMutations = JSON.parse(localStorage.getItem('pendingMutations') || '[]');
+        const pendingProducts = JSON.parse(localStorage.getItem('pendingProductMutations') || '[]');
+        const pendingCustomers = JSON.parse(localStorage.getItem('pendingCustomerMutations') || '[]');
+        
+        const totalPending = pendingMutations.length + pendingProducts.length + pendingCustomers.length;
+        
+        const counterElement = document.getElementById('pending-count');
+        if (totalPending > 0) {
+          counterElement.textContent = `${totalPending} items waiting to sync`;
+          counterElement.style.color = '#e67e22';
+        } else {
+          counterElement.textContent = 'All data is synced';
+          counterElement.style.color = '#27ae60';
+        }
+      } catch (error) {
+        console.log('No pending data found');
+      }
+    }
+
+    // Listen for connection changes
+    window.addEventListener('online', updateConnectionStatus);
+    window.addEventListener('offline', updateConnectionStatus);
+
+    // Auto-retry connection every 30 seconds
+    setInterval(() => {
+      if (navigator.onLine) {
+        // Check if we can actually reach the server
+        fetch('/manifest.json?t=' + Date.now(), { 
+          method: 'HEAD',
+          cache: 'no-cache'
+        })
+        .then(() => window.location.reload())
+        .catch(() => console.log('Still no server connection'));
+      }
+    }, 30000);
+
+    // Update pending count on page load
+    updatePendingCount();
+
+    // Listen for storage changes (in case other tabs update pending items)
+    window.addEventListener('storage', updatePendingCount);
+
+    // Add some visual feedback for user interactions
+    document.addEventListener('DOMContentLoaded', function() {
+      // Add click effects to feature items
+      const featureItems = document.querySelectorAll('.feature-item');
+      featureItems.forEach(item => {
+        item.style.cursor = 'default';
+        item.style.transition = 'background-color 0.2s ease';
+        
+        item.addEventListener('mouseenter', function() {
+          this.style.backgroundColor = 'rgba(39, 174, 96, 0.1)';
+        });
+        
+        item.addEventListener('mouseleave', function() {
+          this.style.backgroundColor = 'transparent';
+        });
+      });
+    });
+  </script>
 </body>
 </html>

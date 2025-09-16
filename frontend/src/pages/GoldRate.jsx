@@ -57,7 +57,7 @@ const GoldRate = () => {
   };
 
   return (
-    <Box sx={{ p: isMobile ? 1 : 0 }}>
+    <Box sx={{ p: 0.5 }}>
       {/* Header */}
       <Box sx={{ 
         display: 'flex', 

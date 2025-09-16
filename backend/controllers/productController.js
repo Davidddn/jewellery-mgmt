@@ -562,6 +562,13 @@ const getRealtimeStats = async (req, res) => {
       }
     });
 
+    // Set cache headers to prevent caching of real-time data
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+
     res.json({
       success: true,
       data: {

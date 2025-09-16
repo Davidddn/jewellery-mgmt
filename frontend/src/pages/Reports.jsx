@@ -61,7 +61,7 @@ function TabPanel(props) {
       {...other}
     >
       {value === index && (
-        <Box sx={{ p: { xs: 1, sm: 3 } }}>
+        <Box sx={{ p: 0.5 }}>
           {children}
         </Box>
       )}
@@ -185,7 +185,12 @@ const Reports = () => {
   };
 
   return (
-    <Box sx={{ p: isMobile ? 1 : 0 }}>
+    <Box sx={{ 
+      width: '100%',
+      maxWidth: '100%',
+      overflow: 'hidden',
+      p: isMobile ? 1 : 0.5 
+    }}>
       {/* Header */}
       <Box sx={{ 
         display: 'flex', 

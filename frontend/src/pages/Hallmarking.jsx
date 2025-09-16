@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import {
-  Typography, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, CircularProgress, Alert, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, useTheme, useMediaQuery, Card, CardContent, Grid, Chip, Stack, Fab
+  Typography, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, CircularProgress, Alert, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, useTheme, useMediaQuery, Card, CardContent, Grid, Chip, Stack, Fab, IconButton, Menu, MenuItem, ListItemIcon, ListItemText
 } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
+import { Add as AddIcon, MoreVert as MoreVertIcon, Edit as EditIcon, Delete as DeleteIcon, Verified as VerifiedIcon, Search as SearchIcon } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { hallmarkingAPI } from '../api/hallmarking';
 import { productsAPI } from '../api/products';
@@ -12,20 +12,44 @@ const Hallmarking = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingHallmark, setEditingHallmark] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [selectedHallmark, setSelectedHallmark] = useState(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['hallmarking'],
-    queryFn: hallmarkingAPI.getHallmarking, // Corrected function name
+    queryFn: hallmarkingAPI.getHallmarking,
   });
   
-  const { data: productsData } = useQuery({ queryKey: ['products'], queryFn: () => productsAPI.getProducts() });
+  const { data: productsData } = useQuery({ 
+    queryKey: ['products'], 
+    queryFn: () => productsAPI.getProducts() 
+  });
 
   const createMutation = useMutation({
     mutationFn: hallmarkingAPI.createHallmarking,
     onSuccess: () => {
       queryClient.invalidateQueries(['hallmarking']);
       setDialogOpen(false);
+      setEditingHallmark(null);
+    }
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, ...data }) => hallmarkingAPI.updateHallmarking(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['hallmarking']);
+      setDialogOpen(false);
+      setEditingHallmark(null);
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: hallmarkingAPI.deleteHallmarking,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['hallmarking']);
+      handleCloseMenu();
     }
   });
 
@@ -33,22 +57,59 @@ const Hallmarking = () => {
     setEditingHallmark(hallmark);
     setDialogOpen(true);
   };
-  const handleCloseDialog = () => setDialogOpen(false);
+
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setEditingHallmark(null);
+  };
+
+  const handleOpenMenu = (event, hallmark) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedHallmark(hallmark);
+  };
+
+  const handleCloseMenu = () => {
+    setAnchorEl(null);
+    setSelectedHallmark(null);
+  };
+
+  const handleEdit = () => {
+    handleOpenDialog(selectedHallmark);
+    handleCloseMenu();
+  };
+
+  const handleDelete = () => {
+    if (selectedHallmark && window.confirm('Are you sure you want to delete this hallmarking record?')) {
+      deleteMutation.mutate(selectedHallmark.id);
+    }
+  };
   
   const handleFormSubmit = (event) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const data = Object.fromEntries(formData.entries());
-    createMutation.mutate(data);
+    
+    if (editingHallmark) {
+      updateMutation.mutate({ id: editingHallmark.id, ...data });
+    } else {
+      createMutation.mutate(data);
+    }
   };
 
   const hallmarks = data?.hallmarking || [];
   const products = productsData?.products || [];
 
+  // Filter hallmarks based on search term
+  const filteredHallmarks = hallmarks.filter(hallmark => 
+    hallmark.Product?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    hallmark.hallmark_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    hallmark.certifying_authority?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   // Mobile Card View
   const renderMobileView = () => (
     <Grid container spacing={2}>
-      {hallmarks.map((hallmark) => (
+      {filteredHallmarks.map((hallmark) => (
         <Grid item xs={12} key={hallmark.id}>
           <Card elevation={1}>
             <CardContent>
@@ -57,12 +118,21 @@ const Hallmarking = () => {
                   <Typography variant="h6" component="h3" sx={{ fontSize: '1rem', fontWeight: 600 }}>
                     {hallmark.Product?.name}
                   </Typography>
-                  <Chip 
-                    label={new Date(hallmark.certification_date).toLocaleDateString()} 
-                    size="small" 
-                    color="primary"
-                    variant="outlined"
-                  />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip 
+                      label={new Date(hallmark.certification_date).toLocaleDateString()} 
+                      size="small" 
+                      color="primary"
+                      variant="outlined"
+                    />
+                    <IconButton 
+                      size="small" 
+                      onClick={(e) => handleOpenMenu(e, hallmark)}
+                      sx={{ ml: 1 }}
+                    >
+                      <MoreVertIcon />
+                    </IconButton>
+                  </Box>
                 </Box>
                 
                 <Typography variant="body2" color="text.secondary">
@@ -71,6 +141,10 @@ const Hallmarking = () => {
                 
                 <Typography variant="body2" color="text.secondary">
                   <strong>Authority:</strong> {hallmark.certifying_authority}
+                </Typography>
+
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Product Details:</strong> {hallmark.Product?.metal_type} - {hallmark.Product?.purity}
                 </Typography>
               </Stack>
             </CardContent>
@@ -87,18 +161,31 @@ const Hallmarking = () => {
         <TableHead>
           <TableRow>
             <TableCell>Product</TableCell>
+            <TableCell>Metal Type</TableCell>
+            <TableCell>Purity</TableCell>
             <TableCell>Hallmark Number</TableCell>
             <TableCell>Authority</TableCell>
             <TableCell>Date</TableCell>
+            <TableCell align="center">Actions</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
-          {hallmarks.map((hallmark) => (
+          {filteredHallmarks.map((hallmark) => (
             <TableRow key={hallmark.id}>
               <TableCell>{hallmark.Product?.name}</TableCell>
+              <TableCell>{hallmark.Product?.metal_type}</TableCell>
+              <TableCell>{hallmark.Product?.purity}</TableCell>
               <TableCell>{hallmark.hallmark_number}</TableCell>
               <TableCell>{hallmark.certifying_authority}</TableCell>
               <TableCell>{new Date(hallmark.certification_date).toLocaleDateString()}</TableCell>
+              <TableCell align="center">
+                <IconButton 
+                  size="small" 
+                  onClick={(e) => handleOpenMenu(e, hallmark)}
+                >
+                  <MoreVertIcon />
+                </IconButton>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -107,7 +194,7 @@ const Hallmarking = () => {
   );
 
   return (
-    <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
+    <Box sx={{ width: '100%', maxWidth: '100%', overflow: 'hidden', p: 0.5 }}>
       <Box sx={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
@@ -143,6 +230,19 @@ const Hallmarking = () => {
           </Fab>
         )}
       </Box>
+
+      {/* Search Box */}
+      <TextField
+        fullWidth
+        placeholder="Search by product name, hallmark number, or authority..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        sx={{ mb: 3 }}
+        InputProps={{
+          startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
+        }}
+        size={isMobile ? "small" : "medium"}
+      />
       
       {isLoading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
@@ -181,6 +281,7 @@ const Hallmarking = () => {
               sx={{ mb: 2 }} 
               SelectProps={{ native: true }}
               size={isMobile ? "small" : "medium"}
+              defaultValue={editingHallmark?.product_id || ''}
             >
               <option value=""></option>
               {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -192,6 +293,7 @@ const Hallmarking = () => {
               required 
               sx={{ mb: 2 }}
               size={isMobile ? "small" : "medium"}
+              defaultValue={editingHallmark?.hallmark_number || ''}
             />
             <TextField 
               label="Certifying Authority" 
@@ -199,6 +301,7 @@ const Hallmarking = () => {
               fullWidth 
               sx={{ mb: 2 }}
               size={isMobile ? "small" : "medium"}
+              defaultValue={editingHallmark?.certifying_authority || ''}
             />
             <TextField 
               label="Certification Date" 
@@ -208,6 +311,7 @@ const Hallmarking = () => {
               InputLabelProps={{ shrink: true }} 
               sx={{ mb: 2 }}
               size={isMobile ? "small" : "medium"}
+              defaultValue={editingHallmark?.certification_date ? new Date(editingHallmark.certification_date).toISOString().split('T')[0] : ''}
             />
           </DialogContent>
           <DialogActions sx={{ p: 2, pt: 1 }}>
@@ -216,6 +320,28 @@ const Hallmarking = () => {
           </DialogActions>
         </Box>
       </Dialog>
+
+      {/* Action Menu */}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleCloseMenu}
+        PaperProps={{
+          elevation: 3,
+          sx: {
+            filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
+          },
+        }}
+      >
+        <MenuItem onClick={handleEdit}>
+          <EditIcon sx={{ mr: 1 }} />
+          Edit
+        </MenuItem>
+        <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>
+          <DeleteIcon sx={{ mr: 1 }} />
+          Delete
+        </MenuItem>
+      </Menu>
     </Box>
   );
 };

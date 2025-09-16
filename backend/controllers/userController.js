@@ -8,9 +8,9 @@ exports.getAllUsers = async (req, res) => {
 
     if (name) {
       whereClause[Op.or] = [
-        { firstName: { [Op.iLike]: `%${name}%` } },
-        { lastName: { [Op.iLike]: `%${name}%` } },
-        { username: { [Op.iLike]: `%${name}%` } }
+        { firstName: { [Op.like]: `%${name}%` } },
+        { lastName: { [Op.like]: `%${name}%` } },
+        { username: { [Op.like]: `%${name}%` } }
       ];
     }
 
@@ -103,6 +103,14 @@ exports.getActiveUserCount = async (req, res) => {
         is_active: true,
       },
     });
+
+    // Set cache headers to prevent caching of real-time data
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+
     res.json({ success: true, data: { activeUsers: count } });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

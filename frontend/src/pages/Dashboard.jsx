@@ -442,20 +442,35 @@ const Dashboard = () => {
 
   // Transform backend response to Chart.js format
   const salesAnalytics = React.useMemo(() => {
+    console.log('Sales Analytics Raw Data:', salesAnalyticsRaw); // Debug log
     const dailySales = salesAnalyticsRaw?.report?.dailySales || [];
+    console.log('Daily Sales Data:', dailySales); // Debug log
+    
     if (!Array.isArray(dailySales) || dailySales.length === 0) {
       return { labels: [], datasets: [] };
     }
+    
     return {
-      labels: dailySales.map((d) => d.date),
+      labels: dailySales.map((d) => {
+        // Format date for better display
+        const date = new Date(d.date);
+        return date.toLocaleDateString('en-IN', { 
+          month: 'short', 
+          day: 'numeric' 
+        });
+      }),
       datasets: [
         {
           label: 'Total Sales',
-          data: dailySales.map((d) => d.total_sales),
+          data: dailySales.map((d) => Number(d.total_sales) || 0),
           fill: false,
           borderColor: '#1976d2',
           backgroundColor: '#1976d2',
           tension: 0.3,
+          pointBackgroundColor: '#1976d2',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          pointRadius: 4,
         },
       ],
     };
@@ -535,7 +550,7 @@ const Dashboard = () => {
   ];
 
   return (
-    <Box sx={{ width: '100%', p: { xs: 1, sm: 2, md: 3 } }}>
+    <Box sx={{ width: '100%', maxWidth: '100%', overflow: 'hidden', p: 0 }}>
       {/* Header */}
       <Box sx={{ 
         display: 'flex', 
@@ -543,7 +558,9 @@ const Dashboard = () => {
         alignItems: { xs: 'flex-start', sm: 'center' },
         flexDirection: { xs: 'column', sm: 'row' },
         mb: 3,
-        gap: { xs: 1, sm: 0 }
+        gap: { xs: 1, sm: 0 },
+        px: 0.5,
+        py: 1
       }}>
         <Typography 
           variant={isMobile ? "h5" : "h4"} 
@@ -751,6 +768,10 @@ const Dashboard = () => {
                     options={{
                       responsive: true,
                       maintainAspectRatio: false,
+                      interaction: {
+                        intersect: false,
+                        mode: 'index',
+                      },
                       plugins: {
                         legend: {
                           display: !isMobile,
@@ -759,6 +780,13 @@ const Dashboard = () => {
                         title: {
                           display: false,
                         },
+                        tooltip: {
+                          callbacks: {
+                            label: function(context) {
+                              return `${context.dataset.label}: ₹${Number(context.parsed.y).toLocaleString('en-IN')}`;
+                            }
+                          }
+                        }
                       },
                       scales: {
                         y: {
@@ -787,7 +815,7 @@ const Dashboard = () => {
                       },
                     }}
                   />
-                  {(!salesAnalytics?.data || !Array.isArray(salesAnalytics.data.datasets) || salesAnalytics.data.datasets.length === 0) && (
+                  {(!salesAnalytics?.datasets || !Array.isArray(salesAnalytics.datasets) || salesAnalytics.datasets.length === 0 || salesAnalytics.datasets[0]?.data?.length === 0) && (
                     <Alert severity="info" sx={{ mt: 2 }}>
                       <AlertTitle>No Sales Data</AlertTitle>
                       Sales analytics will appear here once you have transaction data.

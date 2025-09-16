@@ -21,11 +21,24 @@ const Loyalty = () => {
   });
 
   const addPointsMutation = useMutation({
-    mutationFn: ({ customerId, points }) => loyaltyAPI.addLoyaltyPoints(customerId, points),
+    mutationFn: ({ customerId, points }) => {
+      // If points are negative, use redeem function
+      if (points < 0) {
+        return loyaltyAPI.redeemLoyaltyPoints(customerId, Math.abs(points));
+      } else {
+        return loyaltyAPI.addLoyaltyPoints(customerId, points);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries(['customers']);
       setDialogOpen(false);
       setSelectedCustomer(null);
+      setPoints('');
+      // You could add a success notification here if you have a notification system
+    },
+    onError: (error) => {
+      console.error('Error updating loyalty points:', error);
+      // You could add an error notification here
     }
   });
 
@@ -114,7 +127,7 @@ const Loyalty = () => {
   );
 
   return (
-    <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
+    <Box sx={{ width: '100%', maxWidth: '100%', overflow: 'hidden', p: 0.5 }}>
       <Typography 
         variant={isMobile ? "h5" : "h4"} 
         gutterBottom
@@ -159,6 +172,9 @@ const Loyalty = () => {
           Manage Loyalty Points for {selectedCustomer?.name}
         </DialogTitle>
         <DialogContent sx={{ pb: 1 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Current loyalty points: <strong>{selectedCustomer?.loyalty_points || 0}</strong>
+          </Typography>
           <TextField 
             autoFocus 
             margin="dense" 
@@ -168,17 +184,29 @@ const Loyalty = () => {
             value={points} 
             onChange={(e) => setPoints(e.target.value)}
             size={isMobile ? "small" : "medium"}
-            helperText="Use positive numbers to add points, negative to redeem"
+            helperText="Enter positive number to add points, negative number to redeem points"
+            error={points !== '' && selectedCustomer && Math.abs(parseInt(points)) > selectedCustomer.loyalty_points && parseInt(points) < 0}
           />
+          {points !== '' && parseInt(points) < 0 && selectedCustomer && Math.abs(parseInt(points)) > selectedCustomer.loyalty_points && (
+            <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>
+              Cannot redeem more points than available ({selectedCustomer.loyalty_points} points)
+            </Typography>
+          )}
         </DialogContent>
         <DialogActions sx={{ p: 2, pt: 1 }}>
           <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button 
             onClick={handleAddPoints} 
-            disabled={addPointsMutation.isLoading}
+            disabled={
+              addPointsMutation.isLoading || 
+              !points || 
+              points === '0' ||
+              (parseInt(points) < 0 && selectedCustomer && Math.abs(parseInt(points)) > selectedCustomer.loyalty_points)
+            }
             variant="contained"
           >
-            {addPointsMutation.isLoading ? 'Processing...' : 'Update Points'}
+            {addPointsMutation.isLoading ? 'Processing...' : 
+             (parseInt(points) < 0 ? 'Redeem Points' : 'Add Points')}
           </Button>
         </DialogActions>
       </Dialog>

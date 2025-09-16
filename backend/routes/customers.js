@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const customerController = require('../controllers/customerController');
+const { protect } = require('../middleware/auth');
+const checkRole = require('../middleware/checkRole');
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -12,6 +14,9 @@ const storage = multer.diskStorage({
   }
 });
 const upload = multer({ storage: storage });
+
+// Protect all routes after this middleware
+router.use(protect);
 
 // Search customers - THIS IS THE KEY ROUTE for your Sales component
 router.get('/search', customerController.searchCustomers);
@@ -26,16 +31,16 @@ router.get('/phone/:phone', customerController.getCustomerByPhone);
 router.get('/email/:email', customerController.getCustomerByEmail);
 
 // Get customer by ID
-router.get('/:id', customerController.getCustomerById);
+router.get('/:id', checkRole(['admin', 'manager', 'sales']), customerController.getCustomerById);
 
 // Create new customer
-router.post('/', customerController.createCustomer);
+router.post('/', checkRole(['admin', 'manager', 'sales']), customerController.createCustomer);
 
 // Update customer
-router.put('/:id', customerController.updateCustomer);
+router.put('/:id', checkRole(['admin', 'manager', 'sales']), customerController.updateCustomer);
 
 // Delete customer
-router.delete('/:id', customerController.deleteCustomer);
+router.delete('/:id', checkRole(['admin', 'manager']), customerController.deleteCustomer);
 
 router.post('/upload/csv', upload.single('csv'), customerController.uploadCSV);
 

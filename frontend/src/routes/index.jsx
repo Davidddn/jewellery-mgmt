@@ -1,9 +1,9 @@
 import { Routes, Route } from "react-router-dom";
 import ProtectedRoute from "../components/ProtectedRoute";
-import InvoiceDesigner from '../pages/InvoiceDesigner';
 import Layout from "../components/Layout/Layout";
 import Login from "../pages/Login";
 import Dashboard from "../pages/Dashboard";
+import UnifiedDashboard from "../pages/UnifiedDashboard";
 import Products from "../pages/Products";
 import Customers from "../pages/Customers";
 import Transactions from "../pages/Transactions";
@@ -16,21 +16,34 @@ import ImportData from "../pages/ImportData";
 import GoldRate from "../pages/GoldRate";
 import AdvancedAnalytics from "../pages/AdvancedAnalytics";
 import RealTimeDashboard from "../pages/RealTimeDashboard";
+import Expenses from '../pages/Expenses';
+import CustomerHistory from '../pages/CustomerHistory';
+import ProfitLossAnalytics from '../pages/ProfitLossAnalytics';
+import AuditLogs from '../pages/AuditLogs';
+import PWAStatus from '../pages/PWAStatus';
+import PublicCatalogue from '../pages/PublicCatalogue';
+import CatalogueBrowser from '../pages/CatalogueBrowser';
+import PricingPage from '../components/Pricing/PricingPage';
+import SubscriptionSettings from '../components/Subscription/SubscriptionSettings';
 
-// TODO: Replace with real premium check
-const isPremium = true;
 const AppRoutes = () => {
   return (
     <Routes>
-      {/* Public route */}
+      {/* Public routes */}
       <Route path="/login" element={<Login />} />
+      <Route path="/catalogue" element={<CatalogueBrowser />} />
+      <Route path="/catalogue/:productId" element={<PublicCatalogue />} />
 
       {/* Protected routes */}
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
           {/* Routes that need the layout */}
-          <Route path="/" element={<Dashboard />} /> {/* Default route */}
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/" element={<UnifiedDashboard />} /> {/* Default route */}
+          <Route path="/dashboard" element={<UnifiedDashboard />} />
+          <Route path="/unified-dashboard" element={<UnifiedDashboard />} />
+          {/* Legacy routes for backwards compatibility */}
+          <Route path="/analytics" element={<UnifiedDashboard />} />
+          <Route path="/realtime" element={<UnifiedDashboard />} />
           <Route path="/products" element={<ProtectedRoute />}>
             <Route index element={<Products />} />
           </Route>
@@ -41,13 +54,25 @@ const AppRoutes = () => {
           <Route path="/sales" element={<Sales />} />
           <Route path="/import" element={<ImportData />} />
           <Route path="/gold-rate" element={<GoldRate />} />
-          <Route path="/analytics" element={<AdvancedAnalytics />} />
-          <Route path="/realtime" element={<RealTimeDashboard />} />
-          {/* Premium: Invoice Designer */}
-          {isPremium && (
-            <Route path="/invoice-designer" element={<InvoiceDesigner />} />
-          )}
+
+          {/* New: Expenses and Customer History */}
+          <Route path="/expenses" element={<Expenses />} />
+          <Route path="/profit-loss" element={<ProfitLossAnalytics />} />
+          <Route path="/customer-history" element={<CustomerHistory />} />
+          <Route path="/customer-history/:customerId" element={<CustomerHistory />} />
           
+          {/* Subscription and Pricing */}
+          <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/subscription" element={<SubscriptionSettings />} />
+          
+          {/* PWA Status Page */}
+          <Route path="/pwa-status" element={<PWAStatus />} />
+          
+          {/* Admin-only routes */}
+          <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
+            <Route path="/audit-logs" element={<AuditLogs />} />
+          </Route>
+
           <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
             <Route path="/admin/*" element={<AdminRoutes />} />
           </Route>

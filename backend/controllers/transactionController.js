@@ -1,10 +1,3 @@
-const { Transaction, Product, Customer, Loyalty, TransactionItem, sequelize } = require('../models');
-const { Op, fn, col } = require('sequelize');
-const PDFDocument = require('pdfkit');
-const { Parser } = require('json2csv');
-const fs = require('fs');
-const csv = require('csv-parser');
-
 // @desc    Create a new transaction
 // @route   POST /api/transactions
 // @access  Admin, Sales
@@ -35,12 +28,12 @@ const createTransaction = async (req, res) => {
 
       product.stock_quantity -= item.quantity;
       await product.save({ transaction: t });
-      
+
       transactionItems.push({
-          product_id: item.product_id,
-          quantity: item.quantity,
-          unit_price: product.selling_price,
-          total_price: item_base_price,
+        product_id: item.product_id,
+        quantity: item.quantity,
+        unit_price: product.selling_price,
+        total_price: item_base_price,
       });
     }
 
@@ -56,22 +49,20 @@ const createTransaction = async (req, res) => {
     }, { transaction: t });
 
     for (const item of transactionItems) {
-        item.transaction_id = transaction.id;
-        await TransactionItem.create(item, { transaction: t });
+      item.transaction_id = transaction.id;
+      await TransactionItem.create(item, { transaction: t });
     }
 
-    // Correctly update customer total spent with the final amount
     customer.total_spent = (parseFloat(customer.total_spent) || 0) + transaction.final_amount;
     await customer.save({ transaction: t });
 
-    // Assuming a simple loyalty point system
     const points_earned = Math.floor(transaction.final_amount / 100);
     if (points_earned > 0) {
-        await Loyalty.create({
-            customer_id,
-            points: points_earned,
-            transaction_id: transaction.id,
-        }, { transaction: t });
+      await Loyalty.create({
+        customer_id,
+        points: points_earned,
+        transaction_id: transaction.id,
+      }, { transaction: t });
     }
 
     await t.commit();
@@ -81,6 +72,11 @@ const createTransaction = async (req, res) => {
     res.status(400).json({ success: false, message: err.message });
   }
 };
+const { Transaction, Product, Customer, Loyalty, TransactionItem, sequelize } = require('../models');
+const { Op, fn, col } = require('sequelize');
+const PDFDocument = require('pdfkit');
+const { Parser } = require('json2csv');
+
 
 // @desc    Get all transactions
 // @route   GET /api/transactions
@@ -89,7 +85,14 @@ const getTransactions = async (req, res) => {
   try {
     const transactions = await Transaction.findAll({
       order: [['created_at', 'DESC']],
-      include: [{ model: Customer, as: 'customer', attributes: ['name', 'phone'] }],
+      include: [
+        { model: Customer, as: 'customer', attributes: ['name', 'phone'] },
+        { 
+          model: TransactionItem, 
+          as: 'items',
+          include: [{ model: Product, as: 'product', attributes: ['id', 'name', 'selling_price'] }]
+        }
+      ],
     });
     res.json({ success: true, transactions });
   } catch (err) {
@@ -119,10 +122,10 @@ const getRecentTransactions = async (req, res) => {
 // @access  Admin, Manager, Sales
 const getRealtimeStats = async (req, res) => {
   try {
-    // Get current date in UTC
     const now = new Date();
-    const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
-    const endOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+    // Use UTC dates to ensure consistency
+    const startOfDay = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0));
+    const endOfDay = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999));
 
     const todaysTransactions = await Transaction.findAll({
       where: {
@@ -143,13 +146,19 @@ const getRealtimeStats = async (req, res) => {
       include: [{ model: Customer, as: 'customer', attributes: ['name'] }],
     });
 
-    // Format for frontend: id, final_amount, created_at, customer: { name }
     const recentTransactions = recentTransactionsRaw.map(t => ({
       id: t.id,
       final_amount: t.final_amount,
       created_at: t.created_at,
       customer: t.customer ? { name: t.customer.name } : null
     }));
+
+    // Set cache headers to prevent caching of real-time data
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
 
     res.json({
       success: true,
@@ -169,21 +178,29 @@ const getRealtimeStats = async (req, res) => {
 // @access  Admin, Manager, Sales
 const getSalesTimeline = async (req, res) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+    // Use UTC date to ensure consistency with database timestamps
+    const startOfDay = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0));
 
     const sales = await Transaction.findAll({
       where: {
-        created_at: { [Op.gte]: today },
+        created_at: { [Op.gte]: startOfDay },
         transaction_type: 'sale',
         transaction_status: 'completed'
       },
       attributes: [
-        [fn('strftime', '%Y-%m-%d %H:00:00', col('created_at')), 'hour'],
+        [fn('strftime', '%H:00', col('created_at')), 'hour'],
         [fn('sum', col('final_amount')), 'sales']
       ],
-      group: ['hour'],
-      order: [['hour', 'ASC']]
+      group: [fn('strftime', '%H:00', col('created_at'))],
+      order: [[col('hour'), 'ASC']]
+    });
+
+    // Set cache headers to prevent caching of real-time data
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
     });
 
     res.json({ success: true, data: sales });
@@ -328,53 +345,6 @@ const getInvoice = async (req, res) => {
         } else {
             // PDF Generation (existing logic)
             const doc = new PDFDocument({ margin: 50 });
-            const buffers = [];
-            doc.on('data', buffers.push.bind(buffers));
-            doc.on('end', () => {
-                const pdfData = Buffer.concat(buffers).toString('base64');
-                res.json({ success: true, pdf_data: pdfData });
-            });
-
-            // --- PDF Content ---
-            doc.fontSize(20).text('Invoice', { align: 'center' });
-            doc.moveDown();
-            
-            doc.fontSize(12).text(`Invoice ID: ${transaction.id}`);
-            doc.text(`Date: ${new Date(transaction.createdAt).toLocaleDateString()}`);
-            doc.moveDown();
-
-            if (transaction.customer) {
-                doc.text('Bill To:');
-                doc.text(transaction.customer.name);
-                doc.text(transaction.customer.address || '');
-                doc.text(transaction.customer.email || '');
-                doc.text(transaction.customer.phone || '');
-            }
-            
-            doc.moveDown(2);
-
-            // Table Header
-            const tableTop = doc.y;
-            doc.font('Helvetica-Bold');
-            doc.text('Item', 50, tableTop);
-            doc.text('Qty', 250, tableTop);
-            doc.text('Price', 350, tableTop, { width: 100, align: 'right' });
-            doc.text('Total', 450, tableTop, { width: 100, align: 'right' });
-            doc.font('Helvetica');
-
-            // Table Rows
-            let i = 0;
-            for (const item of transaction.items) {
-                const y = tableTop + 25 + (i * 25);
-                doc.text(item.product.name, 50, y);
-                doc.text(item.quantity.toString(), 250, y);
-                doc.text(`₹${item.unit_price}`, 350, y, { width: 100, align: 'right' });
-                doc.text(`₹${item.total_price}`, 450, y, { width: 100, align: 'right' });
-                i++;
-            }
-            
-            doc.moveDown(i + 2);
-
             // Totals
             const totalsY = doc.y;
             const subtotal = parseFloat(transaction.final_amount) - parseFloat(transaction.tax_amount || 0);

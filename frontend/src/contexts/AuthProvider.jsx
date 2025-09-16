@@ -22,19 +22,29 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const handleLogin = useCallback(async (token, userData) => {
+    console.log('AuthProvider: handleLogin called with token:', token ? 'present' : 'missing');
     console.log('AuthProvider: handleLogin called with user:', userData);
     
     if (!token || !userData) {
       console.error('AuthProvider: Invalid token or userData provided');
+      console.error('AuthProvider: Token:', token);
+      console.error('AuthProvider: UserData:', userData);
       return;
     }
     
     try {
+      console.log('AuthProvider: Setting localStorage items...');
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(userData));
+      
+      console.log('AuthProvider: Setting API authorization header...');
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      
+      console.log('AuthProvider: Setting user state...');
       setUser(userData);
+      
       console.log('AuthProvider: Login successful, user state updated');
+      console.log('AuthProvider: User after login:', userData);
     } catch (error) {
       console.error('AuthProvider: Error during login:', error);
       handleLogout();

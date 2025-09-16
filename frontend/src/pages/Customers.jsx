@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
+import { enqueueMutation } from '../utils/offlineMutationQueue';
 import {
   Box,
   Paper,
@@ -50,15 +51,25 @@ import {
   Person,
   Close,
   LocationOn,
-  FilterList
+  FilterList,
+  History
 } from '@mui/icons-material';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { customersAPI } from '../api/customers';
+import { NotificationContext } from '../contexts/NotificationContext';
+import { usePermissions } from '../hooks/usePermissions';
+import { useActivityLogger } from '../hooks/useActivityLogger';
+import PermissionGuard from '../components/PermissionGuard';
+import withRoleBasedAccess from '../hocs/withRoleBasedAccess';
 
 const Customers = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const queryClient = useQueryClient();
+  const { showSnackbar } = useContext(NotificationContext);
+  const { hasPermission } = usePermissions();
+  const { logEntityAction, logSearch, ActivityTypes, EntityTypes } = useActivityLogger();
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
@@ -71,6 +82,7 @@ const Customers = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, customerId: null });
 
   // Queries
   const { data: customers, isLoading, error } = useQuery({
@@ -94,19 +106,69 @@ const Customers = () => {
            customer.phone?.includes(searchTerm);
   }) || [];
 
+  // Log search activity
+  useEffect(() => {
+    if (searchTerm.length > 2) {
+      const delayedSearch = setTimeout(() => {
+        logSearch('customers', searchTerm, filteredCustomers.length);
+      }, 500);
+      return () => clearTimeout(delayedSearch);
+    }
+  }, [searchTerm, filteredCustomers.length, logSearch]);
+
   const handleAddCustomer = () => {
+    if (!hasPermission('customers.create')) {
+      showSnackbar('You do not have permission to create customers', 'error');
+      return;
+    }
     setSelectedCustomer(null);
     setOpenDialog(true);
+    logEntityAction(ActivityTypes.CREATE, EntityTypes.CUSTOMER, null);
   };
 
   const handleEditCustomer = (customer) => {
+    if (!hasPermission('customers.update')) {
+      showSnackbar('You do not have permission to edit customers', 'error');
+      return;
+    }
     setSelectedCustomer(customer);
     setOpenDialog(true);
+    logEntityAction(ActivityTypes.UPDATE, EntityTypes.CUSTOMER, customer.id, customer);
   };
 
-  const handleDeleteCustomer = async (customerId) => {
-    if (window.confirm('Are you sure you want to delete this customer?')) {
+  const handleDeleteCustomer = (customerId) => {
+    if (!hasPermission('customers.delete')) {
+      showSnackbar('You do not have permission to delete customers', 'error');
+      return;
+    }
+    setConfirmDialog({ open: true, customerId });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!hasPermission('customers.delete')) {
+      showSnackbar('You do not have permission to delete customers', 'error');
+      setConfirmDialog({ open: false, customerId: null });
+      return;
+    }
+
+    const customerId = confirmDialog.customerId;
+    const customerToDelete = filteredCustomers.find(c => c.id === customerId);
+    setConfirmDialog({ open: false, customerId: null });
+    
+    const isOnline = window.navigator.onLine;
+    if (isOnline) {
       await deleteCustomerMutation.mutateAsync(customerId);
+      showSnackbar('Customer deleted successfully.', 'success');
+      logEntityAction(ActivityTypes.DELETE, EntityTypes.CUSTOMER, customerId, customerToDelete);
+    } else {
+      enqueueMutation({ url: `/api/customers/${customerId}`, method: 'DELETE' });
+      showSnackbar('Customer delete queued for sync (offline mode).', 'info');
+      logEntityAction(ActivityTypes.DELETE, EntityTypes.CUSTOMER, customerId, customerToDelete, null, { offline: true });
+      if ('serviceWorker' in navigator && 'SyncManager' in window) {
+        navigator.serviceWorker.ready.then(swReg => {
+          swReg.sync.register('sync-mutations');
+        });
+      }
     }
   };
 
@@ -143,9 +205,9 @@ const Customers = () => {
 
   // Speed Dial Actions
   const speedDialActions = [
-    { icon: <Add />, name: 'Add Customer', onClick: handleAddCustomer },
+    { icon: <Add />, name: 'Add Customer', onClick: handleAddCustomer, permission: 'customers.create' },
     { icon: <FilterList />, name: 'Search', onClick: () => setOpenDrawer(true) },
-  ];
+  ].filter(action => !action.permission || hasPermission(action.permission));
 
   // Mobile Card View
   const renderCardView = () => (
@@ -238,21 +300,25 @@ const Customers = () => {
             </CardContent>
             
             <CardActions sx={{ p: 2, pt: 0 }}>
-              <Button
-                size="small"
-                startIcon={<Edit />}
-                onClick={() => handleEditCustomer(customer)}
-                sx={{ mr: 1 }}
-              >
-                Edit
-              </Button>
-              <IconButton
-                size="small"
-                color="error"
-                onClick={() => handleDeleteCustomer(customer.id)}
-              >
-                <Delete />
-              </IconButton>
+              <PermissionGuard permission="customers.update" showFallback={false}>
+                <Button
+                  size="small"
+                  startIcon={<Edit />}
+                  onClick={() => handleEditCustomer(customer)}
+                  sx={{ mr: 1 }}
+                >
+                  Edit
+                </Button>
+              </PermissionGuard>
+              <PermissionGuard permission="customers.delete" showFallback={false}>
+                <IconButton
+                  size="small"
+                  color="error"
+                  onClick={() => handleDeleteCustomer(customer.id)}
+                >
+                  <Delete />
+                </IconButton>
+              </PermissionGuard>
             </CardActions>
           </Card>
         </Grid>
@@ -333,19 +399,33 @@ const Customers = () => {
                 )}
               </TableCell>
               <TableCell>
+                <PermissionGuard permission="customers.update" showFallback={false}>
+                  <IconButton
+                    onClick={() => handleEditCustomer(customer)}
+                    size="small"
+                    sx={{ mr: 1 }}
+                  >
+                    <Edit />
+                  </IconButton>
+                </PermissionGuard>
+                <PermissionGuard permission="customers.delete" showFallback={false}>
+                  <IconButton
+                    onClick={() => handleDeleteCustomer(customer.id)}
+                    size="small"
+                    color="error"
+                    sx={{ mr: 1 }}
+                  >
+                    <Delete />
+                  </IconButton>
+                </PermissionGuard>
                 <IconButton
-                  onClick={() => handleEditCustomer(customer)}
+                  component={Link}
+                  to={`/customer-history/${customer.id}`}
                   size="small"
-                  sx={{ mr: 1 }}
+                  color="primary"
+                  title="View Purchase History"
                 >
-                  <Edit />
-                </IconButton>
-                <IconButton
-                  onClick={() => handleDeleteCustomer(customer.id)}
-                  size="small"
-                  color="error"
-                >
-                  <Delete />
+                  <History />
                 </IconButton>
               </TableCell>
             </TableRow>
@@ -357,7 +437,7 @@ const Customers = () => {
 
   if (isLoading) {
     return (
-      <Box sx={{ p: { xs: 2, md: 3 } }}>
+      <Box sx={{ p: 0.5 }}>
         <Typography variant="h4" sx={{ mb: 3 }}>Customers</Typography>
         <Grid container spacing={2}>
           {[...Array(6)].map((_, i) => (
@@ -384,7 +464,7 @@ const Customers = () => {
 
   if (error) {
     return (
-      <Box sx={{ p: { xs: 2, md: 3 } }}>
+      <Box sx={{ p: 0.5 }}>
         <Alert severity="error">
           Failed to load customers. Please try again.
         </Alert>
@@ -392,8 +472,28 @@ const Customers = () => {
     );
   }
 
+  // Confirmation Dialog for Delete
+  const renderConfirmDialog = () => (
+    <Dialog open={confirmDialog.open} onClose={() => setConfirmDialog({ open: false, customerId: null })}>
+      <DialogTitle>Delete Customer</DialogTitle>
+      <DialogContent>
+        <Typography>Are you sure you want to delete this customer?</Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setConfirmDialog({ open: false, customerId: null })}>Cancel</Button>
+        <Button onClick={handleConfirmDelete} color="error" variant="contained">Delete</Button>
+      </DialogActions>
+    </Dialog>
+  );
+
   return (
-    <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
+    <Box sx={{ 
+      width: '100%', 
+      maxWidth: '100%',
+      overflow: 'hidden',
+      p: 0.5 
+    }}>
+      {renderConfirmDialog()}
       {/* Header */}
       <Box sx={{ 
         display: 'flex', 
@@ -411,13 +511,15 @@ const Customers = () => {
         </Typography>
         
         {!isMobile && (
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={handleAddCustomer}
-          >
-            Add Customer
-          </Button>
+          <PermissionGuard permission="customers.create" showFallback={false}>
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={handleAddCustomer}
+            >
+              Add Customer
+            </Button>
+          </PermissionGuard>
         )}
       </Box>
 
@@ -472,13 +574,15 @@ const Customers = () => {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
             {searchTerm ? 'Try adjusting your search criteria' : 'Get started by adding your first customer'}
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={handleAddCustomer}
-          >
-            Add Customer
-          </Button>
+          <PermissionGuard permission="customers.create" showFallback={false}>
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={handleAddCustomer}
+            >
+              Add Customer
+            </Button>
+          </PermissionGuard>
         </Paper>
       ) : (
         <>
@@ -648,15 +752,43 @@ const CustomerDialog = ({ open, onClose, customer, onSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const isOnline = window.navigator.onLine;
     try {
       if (customer) {
-        await customersAPI.updateCustomer(customer.id, formData);
+        if (isOnline) {
+          const result = await customersAPI.updateCustomer(customer.id, formData);
+          console.log('Update result:', result);
+          onSuccess();
+        } else {
+          enqueueMutation({ url: `/api/customers/${customer.id}`, method: 'PUT', body: formData });
+          onSuccess();
+          // Register for background sync
+          if ('serviceWorker' in navigator && 'SyncManager' in window) {
+            navigator.serviceWorker.ready.then(swReg => {
+              swReg.sync.register('sync-mutations');
+            });
+          }
+        }
       } else {
-        await customersAPI.createCustomer(formData);
+        if (isOnline) {
+          const result = await customersAPI.createCustomer(formData);
+          console.log('Create result:', result);
+          onSuccess();
+        } else {
+          enqueueMutation({ url: '/api/customers', method: 'POST', body: formData });
+          onSuccess();
+          // Register for background sync
+          if ('serviceWorker' in navigator && 'SyncManager' in window) {
+            navigator.serviceWorker.ready.then(swReg => {
+              swReg.sync.register('sync-mutations');
+            });
+          }
+        }
       }
-      onSuccess();
     } catch (error) {
+      // Show error to user
       console.error('Failed to save customer:', error);
+      alert(`Failed to save customer: ${error.message || 'Unknown error'}`);
     }
   };
 
@@ -791,4 +923,10 @@ const CustomerDialog = ({ open, onClose, customer, onSuccess }) => {
   );
 };
 
-export default Customers;
+const EnhancedCustomers = withRoleBasedAccess(Customers, {
+  permission: 'customers.read',
+  pageName: 'Customers',
+  entityType: 'CUSTOMER'
+});
+
+export default EnhancedCustomers;

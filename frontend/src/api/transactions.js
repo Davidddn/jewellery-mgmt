@@ -99,6 +99,28 @@ export const transactionsAPI = {
     }
   },
 
+  // Email invoice functionality
+  emailInvoice: async (transactionId, emailData) => {
+    try {
+      const response = await api.post(`/invoices/${transactionId}/email`, emailData);
+      return response.data;
+    } catch (error) {
+      console.error('API Error in emailInvoice:', error);
+      throw error;
+    }
+  },
+
+  // Share invoice functionality
+  shareInvoice: async (transactionId) => {
+    try {
+      const response = await api.get(`/invoices/${transactionId}/share`);
+      return response.data;
+    } catch (error) {
+      console.error('API Error in shareInvoice:', error);
+      throw error;
+    }
+  },
+
   // Export all transactions as CSV
   exportTransactions: async () => {
     try {

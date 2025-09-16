@@ -1,12 +1,18 @@
 import axios from 'axios';
 
 // Export the API base URL
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+export const API_BASE_URL = import.meta.env.MODE === 'development' 
+  ? '' // Use relative URL in development to use Vite proxy
+  : import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+console.log('API Config - Mode:', import.meta.env.MODE);
+console.log('API Config - Base URL:', API_BASE_URL);
+console.log('API Config - Full Base URL:', `${API_BASE_URL}/api`);
 
 const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,
   withCredentials: true,
-  timeout: 30000,
+  timeout: 30000, // Increased back to 30000ms to prevent timeouts
 });
 
 // Track if we're already redirecting to prevent loops
@@ -15,6 +21,10 @@ let isRedirecting = false;
 // Add request interceptor to attach token
 api.interceptors.request.use(
   (config) => {
+    console.log('API Request - URL:', config.url);
+    console.log('API Request - Base URL:', config.baseURL);
+    console.log('API Request - Full URL:', config.baseURL + config.url);
+    
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;

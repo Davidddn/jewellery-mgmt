@@ -31,27 +31,35 @@ exports.redeemPoints = async (req, res) => {
     if (!customer) {
       return res.status(404).json({ success: false, message: 'Customer not found' });
     }
-    
-    const availablePoints = await Loyalty.sum('points', {
-        where: { customer_id, redeemed: false }
-    });
 
-    if (!availablePoints || availablePoints < points_to_redeem) {
+    // Check if customer has enough points
+    if (customer.loyalty_points < points_to_redeem) {
       return res.status(400).json({ success: false, message: 'Insufficient points' });
     }
     
-    // Create a redemption record (better than updating all)
+    // Create a redemption record (negative points)
     const redemption = await Loyalty.create({
         customer_id,
         points: -points_to_redeem, // Use negative points for redemption
         redeemed: true // Mark as redeemed
     });
+
+    // Update customer's total loyalty points
+    await customer.decrement('loyalty_points', { by: points_to_redeem });
+
+    // Fetch updated customer data
+    await customer.reload();
     
     res.json({
       success: true,
       message: 'Points redeemed successfully',
       redeemedPoints: points_to_redeem,
-      remainingPoints: availablePoints - points_to_redeem
+      remainingPoints: customer.loyalty_points,
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        loyalty_points: customer.loyalty_points
+      }
     });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -68,6 +76,7 @@ exports.addLoyaltyPoints = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Customer not found' });
         }
 
+        // Create loyalty record
         const loyalty = await Loyalty.create({
             customer_id,
             points,
@@ -75,7 +84,22 @@ exports.addLoyaltyPoints = async (req, res) => {
             redeemed: false
         });
 
-        res.status(201).json({ success: true, message: 'Loyalty points added', loyalty });
+        // Update customer's total loyalty points
+        await customer.increment('loyalty_points', { by: points });
+
+        // Fetch updated customer data
+        await customer.reload();
+
+        res.status(201).json({ 
+            success: true, 
+            message: 'Loyalty points added successfully', 
+            loyalty,
+            customer: {
+                id: customer.id,
+                name: customer.name,
+                loyalty_points: customer.loyalty_points
+            }
+        });
     } catch (err) {
         res.status(400).json({ success: false, message: err.message });
     }
