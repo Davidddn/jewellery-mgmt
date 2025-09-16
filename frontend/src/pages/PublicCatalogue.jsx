@@ -224,7 +224,7 @@ const PublicCatalogue = () => {
               component="img"
               height="400"
               image={product.image_url ? 
-                (product.image_url.startsWith('http') ? product.image_url : `http://localhost:5000${product.image_url}`) 
+                (product.image_url.startsWith('http') ? product.image_url : product.image_url) 
                 : '/placeholder-product.svg'
               }
               alt={product.name}

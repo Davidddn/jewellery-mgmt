@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:5000/api/push';
+const API_BASE = '/api/push';
 const UNSUBSCRIBE_URL = `${API_BASE}/unsubscribe`;
 export async function unsubscribeUserFromPush() {
   if (!('serviceWorker' in navigator)) return;
