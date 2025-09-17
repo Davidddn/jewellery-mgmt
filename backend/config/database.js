@@ -1,64 +1,39 @@
-const { Sequelize } = require('sequelize');
 const path = require('path');
-const logger = require('../utils/logger');
 
-const dbPath = path.resolve(__dirname, '..', process.env.SQLITE_DB_PATH || './data/jewellery_mgmt.db');
-
-console.log('Database path being used:', dbPath);
-
-const sequelize = new Sequelize({
-  dialect: 'sqlite',
-  storage: dbPath,
-  logging: (msg) => logger.debug(msg),
-  define: {
-    timestamps: true,
-    underscored: true
-  }
-});
-
-/**
- * Tests the SQLite database connection.
- * @returns {Promise<boolean>} True if connection is successful, false otherwise.
- */
-const testSqliteConnection = async () => {
-  try {
-    await sequelize.authenticate();
-    return true;
-  } catch (error) {
-    logger.error('Unable to connect to SQLite database:', error);
-    return false;
-  }
-};
-
-/**
- * Synchronizes all defined models with the database.
- * This will create tables if they don't exist, and alter them if they do (e.g., add new columns).
- */
-const syncDatabase = async () => {
-  try {
-  await sequelize.sync({ force: true }); // TEMP: force drop and recreate all tables for schema fix
-    logger.info('Database synchronized successfully.');
-  } catch (error) {
-    logger.error('Error synchronizing database:', error);
+const config = {
+  development: {
+    type: process.env.DATABASE_TYPE || 'sqlite',
+    sqlite: {
+      storage: process.env.SQLITE_PATH || path.join(__dirname, '..', 'data', 'jewellery_mgmt.db')
+    },
+    postgres: {
+      host: process.env.POSTGRES_HOST || 'localhost',
+      port: parseInt(process.env.POSTGRES_PORT) || 5432,
+      database: process.env.POSTGRES_DB || 'jewellery_mgmt',
+      username: process.env.POSTGRES_USER || 'postgres',
+      password: process.env.POSTGRES_PASSWORD || '',
+      ssl: process.env.POSTGRES_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      connectionString: process.env.DATABASE_URL
+    }
+  },
+  production: {
+    type: 'postgres',
+    postgres: {
+      host: process.env.POSTGRES_HOST,
+      port: parseInt(process.env.POSTGRES_PORT) || 5432,
+      database: process.env.POSTGRES_DB,
+      username: process.env.POSTGRES_USER,
+      password: process.env.POSTGRES_PASSWORD,
+      ssl: { rejectUnauthorized: false }, // Required for Neon
+      connectionString: process.env.DATABASE_URL,
+      pool: {
+        min: 0,
+        max: 10,
+        acquire: 30000,
+        idle: 10000
+      }
+    }
   }
 };
 
-/**
- * Closes all database connections.
- * This is important for graceful shutdown.
- */
-const closeConnections = async () => {
-  try {
-    await sequelize.close();
-    logger.info('Database connections closed');
-  } catch (error) {
-    logger.error('Error closing database connections:', error);
-  }
-};
-
-module.exports = {
-  sequelize,
-  testSqliteConnection,
-  syncDatabase,
-  closeConnections
-};
+module.exports = config[process.env.NODE_ENV || 'production'];
