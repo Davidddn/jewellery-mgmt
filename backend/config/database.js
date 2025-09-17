@@ -1,39 +1,27 @@
-const path = require('path');
+const { Sequelize } = require('sequelize');
+require('dotenv').config();
 
-const config = {
-  development: {
-    type: process.env.DATABASE_TYPE || 'sqlite',
-    sqlite: {
-      storage: process.env.SQLITE_PATH || path.join(__dirname, '..', 'data', 'jewellery_mgmt.db')
-    },
-    postgres: {
-      host: process.env.POSTGRES_HOST || 'localhost',
-      port: parseInt(process.env.POSTGRES_PORT) || 5432,
-      database: process.env.POSTGRES_DB || 'jewellery_mgmt',
-      username: process.env.POSTGRES_USER || 'postgres',
-      password: process.env.POSTGRES_PASSWORD || '',
-      ssl: process.env.POSTGRES_SSL === 'true' ? { rejectUnauthorized: false } : false,
-      connectionString: process.env.DATABASE_URL
+const sequelize = new Sequelize(process.env.DATABASE_URL, {
+  dialect: 'postgres',
+  protocol: 'postgres',
+  dialectOptions: {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false // Required for Neon
     }
   },
-  production: {
-    type: 'postgres',
-    postgres: {
-      host: process.env.POSTGRES_HOST,
-      port: parseInt(process.env.POSTGRES_PORT) || 5432,
-      database: process.env.POSTGRES_DB,
-      username: process.env.POSTGRES_USER,
-      password: process.env.POSTGRES_PASSWORD,
-      ssl: { rejectUnauthorized: false }, // Required for Neon
-      connectionString: process.env.DATABASE_URL,
-      pool: {
-        min: 0,
-        max: 10,
-        acquire: 30000,
-        idle: 10000
-      }
-    }
+  logging: false, // Set to console.log to see SQL queries
+});
+
+const testPostgresConnection = async () => {
+  try {
+    await sequelize.authenticate();
+    console.log('✅ PostgreSQL connection has been established successfully.');
+    return true;
+  } catch (error) {
+    console.error('Unable to connect to the PostgreSQL database:', error);
+    return false;
   }
 };
 
-module.exports = config[process.env.NODE_ENV || 'production'];
+module.exports = { sequelize, testPostgresConnection };
