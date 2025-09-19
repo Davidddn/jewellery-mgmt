@@ -1,4 +1,4 @@
-import globals from "globals";
+import * as globals from "globals";
 import js from "@eslint/js";
 import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";

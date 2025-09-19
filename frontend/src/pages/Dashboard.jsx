@@ -7,9 +7,6 @@ import {
   Receipt, 
   TrendingUp, 
   TrendingDown,
-  Group, 
-  VerifiedUser, 
-  Loyalty as LoyaltyIcon, 
   Warning, 
   ExpandMore, 
   ExpandLess, 
@@ -51,22 +48,7 @@ ChartJS.register(
 );
 
 // Responsive helpers must be inside components
-// StatCard Component
-const StatCard = ({ title, value, icon, color, isCurrency = false }) => (
-  <Card sx={{ height: '100%', boxShadow: 2 }}>
-    <CardContent>
-      <Box display="flex" alignItems="center" justifyContent="space-between">
-        <Box>
-          <Typography color="text.secondary" gutterBottom>{title}</Typography>
-          <Typography variant="h4" component="div" sx={{ fontWeight: 'bold' }}>
-            {isCurrency ? `₹${Number(value).toLocaleString('en-IN')}` : value}
-          </Typography>
-        </Box>
-        <Avatar sx={{ bgcolor: color, width: 56, height: 56 }}>{icon}</Avatar>
-      </Box>
-    </CardContent>
-  </Card>
-);
+
 
 // Update Rates Dialog Component
 const UpdateRatesDialog = ({ open, onClose, rates }) => {

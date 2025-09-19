@@ -12,13 +12,8 @@ import {
   Tab,
   Fade
 } from '@mui/material';
-import {
-  Add,
-  Analytics,
   ViewModule,
-  ViewList,
   Refresh
-} from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 // Import existing components
