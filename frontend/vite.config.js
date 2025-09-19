@@ -7,16 +7,31 @@ export default defineConfig({
     port: 3001,
     host: true,
     hmr: {
-      port: 3003, // Changed from 3002 to avoid conflicts
+      port: 3003,
       host: 'localhost'
     },
     proxy: {
-      // Proxy API requests to the backend server
       '/api': {
-        target: 'http://localhost:5000', // Your backend server URL
+        target: 'http://localhost:5000',
         changeOrigin: true,
         secure: false,
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          query: ['@tanstack/react-query'],
+          mui: ['@mui/material', '@mui/icons-material']
+        }
+      }
+    }
+  },
+  resolve: {
+    alias: {
+      '@': '/src'
+    }
+  }
 });
