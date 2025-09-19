@@ -59,7 +59,7 @@ import {
   Refresh as RefreshIcon
 } from '@mui/icons-material';
 import api from '../api';
-import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { NotificationContext } from '../contexts/NotificationContext';
 
 const dynamicFields = [
