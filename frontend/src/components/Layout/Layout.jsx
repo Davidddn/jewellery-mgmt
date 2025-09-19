@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, CssBaseline, Container, useMediaQuery, useTheme } from '@mui/material';
+import { Box, CssBaseline, useMediaQuery, useTheme } from '@mui/material';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -17,7 +17,6 @@ const Layout = () => {
     isOnline,
     pendingActions,
     syncStatus,
-    isSyncing: _isSyncing,
     syncProgress,
     retryAll,
     retryAction

@@ -32,7 +32,8 @@ const withPermissionsAndLogging = (
         permissions={permissions}
         requireAll={requireAll}
         fallback={
-          <div onLoad={handleAccessDenied}>
+          <div>
+            {handleAccessDenied()}
             {/* Access denied component will be rendered */}
           </div>
         }

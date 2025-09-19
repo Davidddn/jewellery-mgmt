@@ -21,7 +21,6 @@ import {
   Sync,
   CheckCircle,
   Error,
-  Warning,
   CloudOff,
   CloudDone,
   ExpandMore,
@@ -200,7 +199,7 @@ export default function SyncProgressIndicator({
         {!isOnline && (
           <Box sx={{ mt: 1, p: 1, bgcolor: 'warning.light', borderRadius: 1 }}>
             <Typography variant="body2" color="warning.dark">
-              You're offline. Changes will sync when connection is restored.
+              You&apos;re offline. Changes will sync when connection is restored.
             </Typography>
           </Box>
         )}

@@ -30,8 +30,6 @@ import {
   ExpandLess,
   ExpandMore,
   AdminPanelSettings,
-  Analytics,
-  Timeline,
   PhoneAndroid
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';

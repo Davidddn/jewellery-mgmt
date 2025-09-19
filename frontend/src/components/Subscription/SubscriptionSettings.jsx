@@ -26,10 +26,8 @@ import {
 import {
   AccountBox,
   Payment,
-  TrendingUp,
   Warning,
   CheckCircle,
-  LocalAtm,
   Upgrade
 } from '@mui/icons-material';
 

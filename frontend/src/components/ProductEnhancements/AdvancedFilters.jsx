@@ -17,13 +17,11 @@ import {
   Typography,
   Badge,
   IconButton,
-  Tooltip,
   Collapse
 } from '@mui/material';
 import {
   Search,
   FilterList,
-  Close,
   TuneSharp,
   SavedSearch,
   History,
@@ -306,7 +304,7 @@ const AdvancedFilters = ({
               onChange={(event, newValue) => setTagFilter(newValue)}
               renderTags={(value, getTagProps) =>
                 value.map((option, index) => (
-                  <Chip variant="outlined" label={option} {...getTagProps({ index })} />
+                  <Chip key={option} variant="outlined" label={option} {...getTagProps({ index })} />
                 ))
               }
               renderInput={(params) => (
@@ -383,7 +381,7 @@ const AdvancedFilters = ({
                 onChange={(e) => onLoadFilter && onLoadFilter(e.target.value)}
               >
                 {savedFilters.map((filter, index) => (
-                  <MenuItem key={index} value={filter}>
+                  <MenuItem key={JSON.stringify(filter)} value={filter}>
                     {filter.name || `Filter ${index + 1}`}
                   </MenuItem>
                 ))}

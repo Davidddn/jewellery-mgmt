@@ -176,7 +176,7 @@ const PublicCatalogue = () => {
               Product Not Found
             </Typography>
             <Typography color="text.secondary" sx={{ mb: 3 }}>
-              The product you're looking for doesn't exist or has been removed.
+              The product you&apos;re looking for doesn&apos;t exist or has been removed.
             </Typography>
             <Button variant="contained" onClick={() => navigate('/')}>
               Browse Catalogue

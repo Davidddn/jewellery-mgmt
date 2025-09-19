@@ -6,6 +6,7 @@ const CustomThemeContext = createContext({
   toggleTheme: () => {},
 });
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useCustomTheme = () => useContext(CustomThemeContext);
 
 export const CustomThemeProvider = ({ children }) => {

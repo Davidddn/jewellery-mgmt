@@ -9,7 +9,6 @@ import {
   IconButton,
   Chip,
   Collapse,
-  Alert,
   LinearProgress,
   Tooltip
 } from '@mui/material';
@@ -18,9 +17,7 @@ import {
   CloudDone as OnlineIcon,
   Close as CloseIcon,
   Refresh as RefreshIcon,
-  Sync as SyncIcon,
-  Warning as WarningIcon,
-  Info as InfoIcon
+  Sync as SyncIcon
 } from '@mui/icons-material';
 
 export function OfflineStatusBanner({

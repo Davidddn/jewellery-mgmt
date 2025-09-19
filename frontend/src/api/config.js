@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Export the API base URL
-export const API_BASE_URL = process.env.NODE_ENV === 'production' 
+export const API_BASE_URL = import.meta.env.PROD 
     ? '' 
     : import.meta.env.VITE_API_URL || '';
 

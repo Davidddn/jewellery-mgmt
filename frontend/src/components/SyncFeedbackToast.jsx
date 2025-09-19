@@ -15,7 +15,6 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  Button,
   Tooltip
 } from '@mui/material';
 import {
@@ -301,6 +300,7 @@ export function SyncFeedbackToast({
       </Snackbar>
 
       {/* Global styles for animations */}
+      {/* eslint-disable-next-line react/no-unknown-property */}
       <style jsx global>{`
         @keyframes spin {
           from { transform: rotate(0deg); }

@@ -35,7 +35,6 @@ import {
   AllInclusive,
   TrendingUp,
   Security,
-  CloudUpload,
   Analytics,
   SupportAgent
 } from '@mui/icons-material';
@@ -469,7 +468,7 @@ const PricingPage = () => {
           {selectedPlan && (
             <Box>
               <Typography variant="body1" sx={{ mb: 3 }}>
-                You're about to upgrade to the <strong>{selectedPlan.name}</strong> plan.
+                You&apos;re about to upgrade to the <strong>{selectedPlan.name}</strong> plan.
               </Typography>
               
               <FormControl fullWidth sx={{ mb: 3 }}>

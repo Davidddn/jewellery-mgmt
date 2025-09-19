@@ -33,7 +33,7 @@ import {
   ExpandMore as ExpandMoreIcon,
   Warning as WarningIcon,
   CheckCircle as CheckIcon,
-  Error as ErrorIcon,
+  Error as ErrorIcon, // eslint-disable-next-line no-unused-vars
   Merge as MergeIcon,
   Schedule as TimeIcon,
   Person as PersonIcon,

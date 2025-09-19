@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
   Card, 
-  CardContent, 
+  CardContent, // eslint-disable-line no-unused-vars
   Typography, 
   Table, 
   TableBody, 
@@ -20,18 +20,17 @@ import {
   useTheme,
   useMediaQuery,
   Skeleton,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
+  FormControl, // eslint-disable-line no-unused-vars
+  InputLabel, // eslint-disable-line no-unused-vars
+  Select, // eslint-disable-line no-unused-vars
+  MenuItem, // eslint-disable-line no-unused-vars
   TextField,
   InputAdornment,
-  IconButton,
+  IconButton, // eslint-disable-line no-unused-vars
   Autocomplete,
   Button
 } from '@mui/material';
 import {
-  Person,
   Phone,
   Email,
   Receipt,
@@ -39,8 +38,7 @@ import {
   Star,
   CalendarToday,
   Search,
-  Refresh,
-  ArrowBack
+  Refresh
 } from '@mui/icons-material';
 
 const CustomerHistory = () => {

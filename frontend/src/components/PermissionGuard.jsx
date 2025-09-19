@@ -48,7 +48,7 @@ const PermissionGuard = ({
             Access Denied
           </Typography>
           <Typography variant="body2">
-            You don't have permission to view this content.
+            You don&apos;t have permission to view this content.
           </Typography>
         </Alert>
       </Box>

@@ -291,7 +291,7 @@ const RealTimeDashboard = () => {
                 {formatCurrency(realtimeStats.todaysSales)}
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                Today's Sales
+                Today&apos;s Sales
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mt: 1 }}>
                 <TrendingUp sx={{ fontSize: 16 }} />
@@ -314,7 +314,7 @@ const RealTimeDashboard = () => {
                 {realtimeStats.todaysTransactions}
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                Today's Orders
+                Today&apos;s Orders
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mt: 1 }}>
                 <TrendingUp sx={{ fontSize: 16 }} />
@@ -498,7 +498,7 @@ const RealTimeDashboard = () => {
             </IconButton>
           }
         >
-          Real-time connection lost. Data may not be current. Click refresh to update manually.
+          Real&apos;time connection lost. Data may not be current. Click refresh to update manually.
         </Alert>
       )}
     </Box>

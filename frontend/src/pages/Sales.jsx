@@ -2927,7 +2927,7 @@ const Sales = () => {
                 No purchase history found
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                This customer hasn't made any purchases yet
+                This customer hasn&apos;t made any purchases yet
               </Typography>
             </Box>
           )}

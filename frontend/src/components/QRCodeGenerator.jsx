@@ -23,7 +23,6 @@ import {
 } from '@mui/material';
 import {
   Download,
-  Share,
   ContentCopy,
   WhatsApp,
   Print
@@ -33,7 +32,6 @@ import { QRCode } from 'react-qr-code';
 const QRCodeGenerator = ({ open, onClose, product }) => {
   const [qrSize, setQrSize] = useState(200);
   const [includeInfo, setIncludeInfo] = useState(true);
-  const [_qrStyle, _setQrStyle] = useState('normal');
   const [bgColor, setBgColor] = useState('#FFFFFF');
   const [fgColor, setFgColor] = useState('#000000');
 

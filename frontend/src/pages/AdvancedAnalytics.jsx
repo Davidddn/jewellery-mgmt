@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import {
   Box,
-  Paper,
   Typography,
   Grid,
   Card,
@@ -28,12 +27,8 @@ import {
     ShowChart
 } from '@mui/icons-material';
 import {
-  LineChart,
-  Line,
   AreaChart,
   Area,
-  BarChart,
-  Bar,
   PieChart,
   Pie,
   Cell,
@@ -44,15 +39,13 @@ import {
   Legend,
   ResponsiveContainer,
   ScatterChart,
-  Scatter,
-  ReferenceLine
+  Scatter
 } from 'recharts';
 import { useQuery } from '@tanstack/react-query';
 import { reportsAPI } from '../api/reports';
 import { transactionsAPI } from '../api/transactions';
 import { productsAPI } from '../api/products';
 import { customersAPI } from '../api/customers';
-import SalesDataDebugger from '../components/SalesDataDebugger';
 
 // Utility functions for analytics
 const calculateTrend = (data, field) => {

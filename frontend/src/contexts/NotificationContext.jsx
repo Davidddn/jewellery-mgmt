@@ -22,8 +22,7 @@ import {
   CheckCircle as SuccessIcon,
   Error as ErrorIcon,
   Inventory as InventoryIcon,
-  TrendingUp as TrendingUpIcon,
-  Person as PersonIcon
+  TrendingUp as TrendingUpIcon
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { productsAPI } from '../api/products';

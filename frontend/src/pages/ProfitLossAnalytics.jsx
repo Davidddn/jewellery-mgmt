@@ -173,7 +173,7 @@ const ProfitLossAnalytics = () => {
                   <Typography variant="h4" fontWeight="bold">
                     {formatCurrency(metrics.today?.profit)}
                   </Typography>
-                  <Typography variant="body2">Today's Profit</Typography>
+                  <Typography variant="body2">Today&apos;s Profit</Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
                     {metrics.today?.margin >= 0 ? <TrendingUp /> : <TrendingDown />}
                     <Typography variant="caption" sx={{ ml: 0.5 }}>
@@ -195,7 +195,7 @@ const ProfitLossAnalytics = () => {
                   <Typography variant="h4" fontWeight="bold">
                     {formatCurrency(metrics.month?.profit)}
                   </Typography>
-                  <Typography variant="body2">This Month's Profit</Typography>
+                  <Typography variant="body2">This Month&apos;s Profit</Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
                     {metrics.month?.margin >= 0 ? <TrendingUp /> : <TrendingDown />}
                     <Typography variant="caption" sx={{ ml: 0.5 }}>

@@ -19,8 +19,6 @@ import {
   ShowChart,
   Psychology,
   AutoGraph,
-  PriceChange,
-  Inventory,
   People,
   Timeline
 } from '@mui/icons-material';

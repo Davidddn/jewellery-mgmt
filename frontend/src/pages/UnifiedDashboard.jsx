@@ -145,7 +145,7 @@ const UnifiedDashboard = () => {
       >
         <Box sx={{ textAlign: 'center' }}>
           <Typography variant="caption" color="text.secondary">
-            Today's Sales
+            Today&apos;s Sales
           </Typography>
           <Typography variant="body2" fontWeight="bold">
             ₹45,230

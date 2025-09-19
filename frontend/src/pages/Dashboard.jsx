@@ -520,7 +520,7 @@ const Dashboard = () => {
   // Stat cards data
   const statCards = [
     {
-      title: 'Today\'s Sales',
+      title: "Today&apos;s Sales",
       value: `₹${Number(stats.todaySales || 0).toLocaleString('en-IN')}`,
       icon: <AttachMoney />,
       color: 'success',

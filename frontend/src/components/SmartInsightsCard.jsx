@@ -18,8 +18,7 @@ import {
   Fade
 } from '@mui/material';
 import {
-  Psychology,
-  TrendingUp,
+    TrendingUp,
   TrendingDown,
   Lightbulb,
   Warning,
