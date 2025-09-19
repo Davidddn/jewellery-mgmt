@@ -19,12 +19,24 @@ export default defineConfig({
     },
   },
   build: {
+    commonjsOptions: {
+      include: [/node_modules/]
+    },
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          query: ['@tanstack/react-query'],
-          mui: ['@mui/material', '@mui/icons-material']
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            if (id.includes('@tanstack/react-query')) {
+              return 'query';
+            }
+            if (id.includes('@mui')) {
+              return 'mui';
+            }
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'vendor';
+            }
+            return 'vendor';
+          }
         }
       }
     }
@@ -33,5 +45,8 @@ export default defineConfig({
     alias: {
       '@': '/src'
     }
+  },
+  optimizeDeps: {
+    include: ['@tanstack/react-query']
   }
 });
