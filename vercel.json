@@ -1,13 +1,8 @@
 {
   "version": 2,
+  "buildCommand": "cd frontend && npm run build",
+  "outputDirectory": "frontend/dist",
   "builds": [
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "outputDirectory": "frontend/dist"
-      }
-    },
     {
       "src": "backend/server.js",
       "use": "@vercel/node",
@@ -26,11 +21,11 @@
       "headers": {
         "cache-control": "public, max-age=31536000, immutable"
       },
-      "dest": "frontend/dist/assets/$1"
+      "dest": "/assets/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "frontend/dist/index.html"
+      "dest": "/index.html"
     }
   ],
   "env": {
